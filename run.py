@@ -15,13 +15,15 @@ from baselines.common.atari_wrappers import NoopResetEnv, FrameStack
 from mpi4py import MPI
 
 from auxiliary_tasks import FeatureExtractor, InverseDynamics, VAE, JustPixels
-from cnn_policy import CnnPolicy
+from cnn_policy import CnnPolicy, PredErrorPolicy
 from cppo_agent import PpoOptimizer
 from dynamics import Dynamics, UNet
 from utils import random_agent_ob_mean_std
 from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_robo_hockey, \
     make_multi_pong, AddRandomStateToInfo, MaxAndSkipEnv, ProcessFrame84, ExtraTimeLimit
 
+# hidsize = 512
+# feat_dim = 512
 
 def start_experiment(**args):
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
@@ -45,6 +47,7 @@ class Trainer(object):
         self._set_env_vars()
 
         self.policy = CnnPolicy(
+        # self.policy = PredErrorPolicy(
             scope='pol',
             ob_space=self.ob_space,
             ac_space=self.ac_space,
@@ -53,7 +56,8 @@ class Trainer(object):
             ob_mean=self.ob_mean,
             ob_std=self.ob_std,
             layernormalize=False,
-            nl=tf.nn.leaky_relu)
+            nl=tf.nn.leaky_relu,
+        )
 
         self.feature_extractor = {"none": FeatureExtractor,
                                   "idf": InverseDynamics,
@@ -91,6 +95,19 @@ class Trainer(object):
             int_coeff=hps['int_coeff'],
             dynamics=self.dynamics
         )
+
+        # self.policy.set_dynamics(
+        #     scope='pol',
+        #     ob_space=self.ob_space,
+        #     ac_space=self.ac_space,
+        #     hidsize=512,
+        #     feat_dim=512,
+        #     ob_mean=self.ob_mean,
+        #     ob_std=self.ob_std,
+        #     layernormalize=False,
+        #     nl=tf.nn.leaky_relu,
+        #     dynamics=self.dynamics
+        # )
 
         self.agent.to_report['aux'] = tf.reduce_mean(self.feature_extractor.loss)
         self.agent.total_loss += self.agent.to_report['aux']
@@ -162,7 +179,7 @@ def get_experiment_environment(**args):
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='BreakoutNoFrameskip-v4',
+    parser.add_argument('--env', help='environment ID', default='SeaquestNoFrameskip-v4',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=4500, type=int)
     parser.add_argument('--env_kind', type=str, default="atari")
@@ -203,7 +220,7 @@ if __name__ == '__main__':
     parser.add_argument('--ext_coeff', type=float, default=0.)
     parser.add_argument('--int_coeff', type=float, default=1.)
     parser.add_argument('--layernorm', type=int, default=0)
-    parser.add_argument('--feat_learning', type=str, default="none",
+    parser.add_argument('--feat_learning', type=str, default="pix2pix",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
 
     args = parser.parse_args()

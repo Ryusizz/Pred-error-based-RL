@@ -93,6 +93,9 @@ class PpoOptimizer(object):
         self.envs = [
             VecEnv(env_fns[l * self.lump_stride: (l + 1) * self.lump_stride], spaces=[self.ob_space, self.ac_space]) for
             l in range(self.nlump)]
+        print("# of Envs", len(self.envs))
+        print(type(self.envs[0]))
+        print(self.envs[0])
 
         self.rollout = Rollout(ob_space=self.ob_space, ac_space=self.ac_space, nenvs=nenvs,
                                nsteps_per_seg=self.nsteps_per_seg,
@@ -183,6 +186,7 @@ class PpoOptimizer(object):
             (self.dynamics.last_ob,
              self.rollout.buf_obs_last.reshape([self.nenvs * self.nsegs_per_env, 1, *self.ob_space.shape]))
         ])
+        ph_buf.extend([self.stochpol.pred_error, resh(self.rollout.buf_errs)]) # New
         mblossvals = []
 
         for _ in range(self.nepochs):
@@ -234,3 +238,5 @@ class RewardForwardFilter(object):
         else:
             self.rewems = self.rewems * self.gamma + rews
         return self.rewems
+
+

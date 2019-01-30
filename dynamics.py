@@ -24,8 +24,11 @@ class Dynamics(object):
 
         self.out_features = self.auxiliary_task.next_features
 
+        self.pred_features = self.predict_next()
+        self.pred_error = self.pred_features - tf.stop_gradient(self.out_features)
         with tf.variable_scope(self.scope + "_loss"):
-            self.loss = self.get_loss()
+            # self.loss = self.get_loss(self.pred_features)
+            self.loss = tf.reduce_mean(self.pred_error ** 2, -1)
 
     def get_features(self, x, reuse):
         nl = tf.nn.leaky_relu
@@ -40,7 +43,7 @@ class Dynamics(object):
             x = unflatten_first_dim(x, sh)
         return x
 
-    def get_loss(self):
+    def predict_next(self):
         ac = tf.one_hot(self.ac, self.ac_space.n, axis=2)
         sh = tf.shape(ac)
         ac = flatten_two_dims(ac)
@@ -62,7 +65,10 @@ class Dynamics(object):
             n_out_features = self.out_features.get_shape()[-1].value
             x = tf.layers.dense(add_ac(x), n_out_features, activation=None)
             x = unflatten_first_dim(x, sh)
-        return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, -1)
+        return x
+
+    # def get_loss(self, x):
+    #     return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, -1)
 
     def calculate_loss(self, ob, last_ob, acs):
         n_chunks = 8
@@ -72,7 +78,15 @@ class Dynamics(object):
         sli = lambda i: slice(i * chunk_size, (i + 1) * chunk_size)
         return np.concatenate([getsess().run(self.loss,
                                              {self.obs: ob[sli(i)], self.last_ob: last_ob[sli(i)],
-                                              self.ac: acs[sli(i)]}) for i in range(n_chunks)], 0)
+                                              self.ac: acs[sli(i)]}) for i in range(n_chunks)], 0) # New, maybe error
+
+    # def calculate_pred(self, ob, acs):
+        # return getsess().run(self.pred_error,
+        #                      {self.obs: ob, self.ac: acs})
+
+    def calculate_err(self, ob, last_ob, acs):
+        return getsess().run(self.pred_error,
+                             {self.obs: ob, self.last_ob: last_ob, self.ac: acs})
 
 
 class UNet(Dynamics):

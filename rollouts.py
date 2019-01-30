@@ -35,6 +35,9 @@ class Rollout(object):
         self.buf_new_last = self.buf_news[:, 0, ...].copy()
         self.buf_vpred_last = self.buf_vpreds[:, 0, ...].copy()
 
+        # self.buf_fpred = np.empty((nenvs, self.nsteps, *self.dynamics.pred_error.shape), self.dynamics.dtype) # New
+        self.buf_errs = np.empty((nenvs, self.nsteps, *self.dynamics.pred_error.shape), self.dynamics.dtype) # New
+
         self.env_results = [None] * self.nlumps
         # self.prev_feat = [None for _ in range(self.nlumps)]
         # self.prev_acs = [None for _ in range(self.nlumps)]
@@ -60,6 +63,7 @@ class Rollout(object):
         int_rew = self.dynamics.calculate_loss(ob=self.buf_obs,
                                                last_ob=self.buf_obs_last,
                                                acs=self.buf_acs)
+        # int_rew = np.zeros(int_rew.shape)
         self.buf_rews[:] = self.reward_fun(int_rew=int_rew, ext_rew=self.buf_ext_rews)
 
     def rollout_step(self):
@@ -67,6 +71,7 @@ class Rollout(object):
         s = t % self.nsteps_per_seg
         for l in range(self.nlumps):
             obs, prevrews, news, infos = self.env_get(l)
+            err = self.buf_errs[sli, t]
             # if t > 0:
             #     prev_feat = self.prev_feat[l]
             #     prev_acs = self.prev_acs[l]
@@ -84,7 +89,7 @@ class Rollout(object):
 
             sli = slice(l * self.lump_stride, (l + 1) * self.lump_stride)
 
-            acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs)
+            acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, err)
             self.env_step(l, acs)
 
             # self.prev_feat[l] = dyn_feat
@@ -94,6 +99,8 @@ class Rollout(object):
             self.buf_vpreds[sli, t] = vpreds
             self.buf_nlps[sli, t] = nlps
             self.buf_acs[sli, t] = acs
+            if t < self.nsteps - 1 :
+                self.buf_errs[sli, t + 1] = self.dynamics.calculate_err(obs, acs)
             if t > 0:
                 self.buf_ext_rews[sli, t - 1] = prevrews
             # if t > 0:
