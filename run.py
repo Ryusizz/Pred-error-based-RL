@@ -46,8 +46,8 @@ class Trainer(object):
         self.num_timesteps = num_timesteps
         self._set_env_vars()
 
-        self.policy = CnnPolicy(
-        # self.policy = PredErrorPolicy(
+        # self.policy = CnnPolicy(
+        self.policy = PredErrorPolicy(
             scope='pol',
             ob_space=self.ob_space,
             ac_space=self.ac_space,
@@ -220,8 +220,9 @@ if __name__ == '__main__':
     parser.add_argument('--ext_coeff', type=float, default=0.)
     parser.add_argument('--int_coeff', type=float, default=1.)
     parser.add_argument('--layernorm', type=int, default=0)
-    parser.add_argument('--feat_learning', type=str, default="pix2pix",
+    parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
+    # parser.add_argument('--use_error', type=int, default=1)
 
     args = parser.parse_args()
 

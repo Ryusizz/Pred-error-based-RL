@@ -186,7 +186,7 @@ class PpoOptimizer(object):
             (self.dynamics.last_ob,
              self.rollout.buf_obs_last.reshape([self.nenvs * self.nsegs_per_env, 1, *self.ob_space.shape]))
         ])
-        ph_buf.extend([self.stochpol.pred_error, resh(self.rollout.buf_errs)]) # New
+        ph_buf.extend([(self.stochpol.pred_error, resh(self.rollout.buf_errs))]) # New
         mblossvals = []
 
         for _ in range(self.nepochs):

@@ -4,6 +4,7 @@ import numpy as np
 from mpi4py import MPI
 
 from recorder import Recorder
+from utils import unflatten_first_dim
 
 
 class Rollout(object):
@@ -36,7 +37,11 @@ class Rollout(object):
         self.buf_vpred_last = self.buf_vpreds[:, 0, ...].copy()
 
         # self.buf_fpred = np.empty((nenvs, self.nsteps, *self.dynamics.pred_error.shape), self.dynamics.dtype) # New
-        self.buf_errs = np.empty((nenvs, self.nsteps, *self.dynamics.pred_error.shape), self.dynamics.dtype) # New
+        # print(dynamics.pred_error.shape)
+        # print(dynamics.pred_error.dtype)
+        self.buf_errs = np.empty((nenvs, self.nsteps, 512), np.float32) # New
+        self.buf_errs_last = self.buf_errs[:, 0, ...].copy()
+        self.err_last = self.buf_errs[:, 0, ...].copy()
 
         self.env_results = [None] * self.nlumps
         # self.prev_feat = [None for _ in range(self.nlumps)]
@@ -63,7 +68,6 @@ class Rollout(object):
         int_rew = self.dynamics.calculate_loss(ob=self.buf_obs,
                                                last_ob=self.buf_obs_last,
                                                acs=self.buf_acs)
-        # int_rew = np.zeros(int_rew.shape)
         self.buf_rews[:] = self.reward_fun(int_rew=int_rew, ext_rew=self.buf_ext_rews)
 
     def rollout_step(self):
@@ -71,7 +75,7 @@ class Rollout(object):
         s = t % self.nsteps_per_seg
         for l in range(self.nlumps):
             obs, prevrews, news, infos = self.env_get(l)
-            err = self.buf_errs[sli, t]
+            # err = self.buf_errs[sli, t]
             # if t > 0:
             #     prev_feat = self.prev_feat[l]
             #     prev_acs = self.prev_acs[l]
@@ -89,7 +93,7 @@ class Rollout(object):
 
             sli = slice(l * self.lump_stride, (l + 1) * self.lump_stride)
 
-            acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, err)
+            acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, self.err_last)
             self.env_step(l, acs)
 
             # self.prev_feat[l] = dyn_feat
@@ -99,10 +103,20 @@ class Rollout(object):
             self.buf_vpreds[sli, t] = vpreds
             self.buf_nlps[sli, t] = nlps
             self.buf_acs[sli, t] = acs
-            if t < self.nsteps - 1 :
-                self.buf_errs[sli, t + 1] = self.dynamics.calculate_err(obs, acs)
+            if t == 0 :
+                self.buf_errs[sli, t] = self.buf_errs_last[sli]
+            elif t < self.nsteps - 1 :
+                # print(self.buf_obs[sli, t - 1].shape)
+                # print(obs.shape)
+                # print(self.buf_acs[sli, t - 1].shape)
+                a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
+                b = np.expand_dims(obs, 1)
+                c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
+                # print(a.shape, b.shape, c.shape)
+                self.buf_errs[sli, t] = self.err_last = np.squeeze(self.dynamics.calculate_err(a, b, c))
             if t > 0:
                 self.buf_ext_rews[sli, t - 1] = prevrews
+                # self.buf_errs[sli, t - 1] = self.dynamics.calculated_err(obs, acs)
             # if t > 0:
             #     dyn_logp = self.policy.call_reward(prev_feat, pol_feat, prev_acs)
             #
@@ -122,7 +136,11 @@ class Rollout(object):
                 if t == self.nsteps - 1:
                     self.buf_new_last[sli] = nextnews
                     self.buf_ext_rews[sli, t] = ext_rews
-                    _, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs)
+                    a = np.expand_dims(obs, 1)
+                    b = np.expand_dims(nextobs, 1)
+                    c = np.expand_dims(acs, 1)
+                    self.buf_errs_last[sli] = self.err_last = np.squeeze(self.dynamics.calculate_err(a, b, c))
+                    nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, self.err_last)
                     # dyn_logp = self.policy.call_reward(self.prev_feat[l], last_pol_feat, prev_acs)
                     # dyn_logp = dyn_logp.reshape(-1, )
                     # int_rew = dyn_logp

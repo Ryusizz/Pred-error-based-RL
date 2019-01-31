@@ -104,10 +104,13 @@ class PredErrorPolicy(CnnPolicy):
             x = flatten_two_dims(self.ph_ob)
             self.flat_features = self.get_features(x, reuse=False)
             self.features = unflatten_first_dim(self.flat_features, sh)
+            self.flat_pred_error = flatten_two_dims(self.pred_error)
             # self.pred_error = self.dynamics.pred_error
 
             with tf.variable_scope(scope, reuse=False):
-                x = tf.concat([self.flat_features, self.pred_error], axis=1)
+                print(self.flat_features.shape)
+                print(self.pred_error.shape)
+                x = tf.concat([self.flat_features, self.flat_pred_error], axis=1)
                 # x = fc(self.flat_features, units=hidsize, activation=activ)
                 x = fc(x, units=hidsize, activation=activ)
                 x = fc(x, units=hidsize, activation=activ)
