@@ -22,7 +22,7 @@ class PpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, dynamics):
+                 nsteps_per_seg, nsegs_per_env, dynamics, use_error):
         self.dynamics = dynamics
         with tf.variable_scope(scope):
             self.use_recorder = True
@@ -44,6 +44,7 @@ class PpoOptimizer(object):
             self.use_news = use_news
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
+            self.use_error = use_error # New
             self.ph_adv = tf.placeholder(tf.float32, [None, None])
             self.ph_ret = tf.placeholder(tf.float32, [None, None])
             self.ph_rews = tf.placeholder(tf.float32, [None, None])
@@ -93,9 +94,6 @@ class PpoOptimizer(object):
         self.envs = [
             VecEnv(env_fns[l * self.lump_stride: (l + 1) * self.lump_stride], spaces=[self.ob_space, self.ac_space]) for
             l in range(self.nlump)]
-        print("# of Envs", len(self.envs))
-        print(type(self.envs[0]))
-        print(self.envs[0])
 
         self.rollout = Rollout(ob_space=self.ob_space, ac_space=self.ac_space, nenvs=nenvs,
                                nsteps_per_seg=self.nsteps_per_seg,
@@ -105,7 +103,8 @@ class PpoOptimizer(object):
                                int_rew_coeff=self.int_coeff,
                                ext_rew_coeff=self.ext_coeff,
                                record_rollouts=self.use_recorder,
-                               dynamics=dynamics)
+                               dynamics=dynamics,
+                               use_error=self.use_error)
 
         self.buf_advs = np.zeros((nenvs, self.rollout.nsteps), np.float32)
         self.buf_rets = np.zeros((nenvs, self.rollout.nsteps), np.float32)
@@ -186,7 +185,8 @@ class PpoOptimizer(object):
             (self.dynamics.last_ob,
              self.rollout.buf_obs_last.reshape([self.nenvs * self.nsegs_per_env, 1, *self.ob_space.shape]))
         ])
-        ph_buf.extend([(self.stochpol.pred_error, resh(self.rollout.buf_errs))]) # New
+        if self.use_error :
+            ph_buf.extend([(self.stochpol.pred_error, resh(self.rollout.buf_errs))]) # New
         mblossvals = []
 
         for _ in range(self.nepochs):

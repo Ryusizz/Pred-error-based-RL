@@ -46,8 +46,12 @@ class Trainer(object):
         self.num_timesteps = num_timesteps
         self._set_env_vars()
 
-        # self.policy = CnnPolicy(
-        self.policy = PredErrorPolicy(
+        if hps['use_error'] :
+            self.policy = PredErrorPolicy
+        else :
+            self.policy = CnnPolicy
+
+        self.policy = self.policy(
             scope='pol',
             ob_space=self.ob_space,
             ac_space=self.ac_space,
@@ -93,21 +97,9 @@ class Trainer(object):
             normadv=hps['norm_adv'],
             ext_coeff=hps['ext_coeff'],
             int_coeff=hps['int_coeff'],
-            dynamics=self.dynamics
+            dynamics=self.dynamics,
+            use_error=hps['use_error']
         )
-
-        # self.policy.set_dynamics(
-        #     scope='pol',
-        #     ob_space=self.ob_space,
-        #     ac_space=self.ac_space,
-        #     hidsize=512,
-        #     feat_dim=512,
-        #     ob_mean=self.ob_mean,
-        #     ob_std=self.ob_std,
-        #     layernormalize=False,
-        #     nl=tf.nn.leaky_relu,
-        #     dynamics=self.dynamics
-        # )
 
         self.agent.to_report['aux'] = tf.reduce_mean(self.feature_extractor.loss)
         self.agent.total_loss += self.agent.to_report['aux']
@@ -179,7 +171,7 @@ def get_experiment_environment(**args):
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='SeaquestNoFrameskip-v4',
+    parser.add_argument('--env', help='environment ID', default='BeamRiderNoFrameskip-v4',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=4500, type=int)
     parser.add_argument('--env_kind', type=str, default="atari")
@@ -222,7 +214,7 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    # parser.add_argument('--use_error', type=int, default=1)
+    parser.add_argument('--use_error', type=int, default=1)
 
     args = parser.parse_args()
 

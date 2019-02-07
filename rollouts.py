@@ -9,7 +9,7 @@ from utils import unflatten_first_dim
 
 class Rollout(object):
     def __init__(self, ob_space, ac_space, nenvs, nsteps_per_seg, nsegs_per_env, nlumps, envs, policy,
-                 int_rew_coeff, ext_rew_coeff, record_rollouts, dynamics):
+                 int_rew_coeff, ext_rew_coeff, record_rollouts, dynamics, use_error):
         self.nenvs = nenvs
         self.nsteps_per_seg = nsteps_per_seg
         self.nsegs_per_env = nsegs_per_env
@@ -21,6 +21,7 @@ class Rollout(object):
         self.envs = envs
         self.policy = policy
         self.dynamics = dynamics
+        self.use_error = use_error
 
         self.reward_fun = lambda ext_rew, int_rew: ext_rew_coeff * np.clip(ext_rew, -1., 1.) + int_rew_coeff * int_rew
 
@@ -40,7 +41,7 @@ class Rollout(object):
         # print(dynamics.pred_error.shape)
         # print(dynamics.pred_error.dtype)
         self.buf_errs = np.empty((nenvs, self.nsteps, 512), np.float32) # New
-        self.buf_errs_last = self.buf_errs[:, 0, ...].copy()
+        self.buf_errs_last = self.buf_errs[:, 0, ...].copy() # New
         self.err_last = self.buf_errs[:, 0, ...].copy()
 
         self.env_results = [None] * self.nlumps
@@ -93,7 +94,10 @@ class Rollout(object):
 
             sli = slice(l * self.lump_stride, (l + 1) * self.lump_stride)
 
-            acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, self.err_last)
+            if self.use_error :
+                acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, self.err_last)
+            else :
+                acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs)
             self.env_step(l, acs)
 
             # self.prev_feat[l] = dyn_feat
@@ -103,17 +107,18 @@ class Rollout(object):
             self.buf_vpreds[sli, t] = vpreds
             self.buf_nlps[sli, t] = nlps
             self.buf_acs[sli, t] = acs
-            if t == 0 :
-                self.buf_errs[sli, t] = self.buf_errs_last[sli]
-            elif t < self.nsteps - 1 :
-                # print(self.buf_obs[sli, t - 1].shape)
-                # print(obs.shape)
-                # print(self.buf_acs[sli, t - 1].shape)
-                a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
-                b = np.expand_dims(obs, 1)
-                c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
-                # print(a.shape, b.shape, c.shape)
-                self.buf_errs[sli, t] = self.err_last = np.squeeze(self.dynamics.calculate_err(a, b, c))
+            if self.use_error :
+                if t == 0 :
+                    self.buf_errs[sli, t] = self.buf_errs_last[sli]
+                elif t < self.nsteps - 1 :
+                    # print(self.buf_obs[sli, t - 1].shape)
+                    # print(obs.shape)
+                    # print(self.buf_acs[sli, t - 1].shape)
+                    a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
+                    b = np.expand_dims(obs, 1)
+                    c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
+                    # print(a.shape, b.shape, c.shape)
+                    self.buf_errs[sli, t] = self.err_last = np.squeeze(self.dynamics.calculate_err(a, b, c))
             if t > 0:
                 self.buf_ext_rews[sli, t - 1] = prevrews
                 # self.buf_errs[sli, t - 1] = self.dynamics.calculated_err(obs, acs)
@@ -136,11 +141,14 @@ class Rollout(object):
                 if t == self.nsteps - 1:
                     self.buf_new_last[sli] = nextnews
                     self.buf_ext_rews[sli, t] = ext_rews
-                    a = np.expand_dims(obs, 1)
-                    b = np.expand_dims(nextobs, 1)
-                    c = np.expand_dims(acs, 1)
-                    self.buf_errs_last[sli] = self.err_last = np.squeeze(self.dynamics.calculate_err(a, b, c))
-                    nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, self.err_last)
+                    if self.use_error :
+                        a = np.expand_dims(obs, 1)
+                        b = np.expand_dims(nextobs, 1)
+                        c = np.expand_dims(acs, 1)
+                        self.buf_errs_last[sli] = self.err_last = np.squeeze(self.dynamics.calculate_err(a, b, c))
+                        nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, self.err_last)
+                    else :
+                        nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs)
                     # dyn_logp = self.policy.call_reward(self.prev_feat[l], last_pol_feat, prev_acs)
                     # dyn_logp = dyn_logp.reshape(-1, )
                     # int_rew = dyn_logp
