@@ -22,7 +22,7 @@ class PpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, dynamics, use_error):
+                 nsteps_per_seg, nsegs_per_env, dynamics, use_error, logger):
         self.dynamics = dynamics
         with tf.variable_scope(scope):
             self.use_recorder = True
@@ -70,6 +70,10 @@ class PpoOptimizer(object):
             self.total_loss = pg_loss + ent_loss + vf_loss
             self.to_report = {'tot': self.total_loss, 'pg': pg_loss, 'vf': vf_loss, 'ent': entropy,
                               'approxkl': approxkl, 'clipfrac': clipfrac}
+
+            self.summary_writer = tf.summary.FileWriter(logdir, graph=getsess()) # New
+            self.merged_summary_op = tf.summary.merge_all() # New
+            self.log_dir = logger.get_dir()
 
     def start_interaction(self, env_fns, dynamics, nlump=2):
         self.loss_names, self._losses = zip(*list(self.to_report.items()))
@@ -196,7 +200,7 @@ class PpoOptimizer(object):
                 mbenvinds = envinds[start:end]
                 fd = {ph: buf[mbenvinds] for (ph, buf) in ph_buf}
                 fd.update({self.ph_lr: self.lr, self.ph_cliprange: self.cliprange})
-                mblossvals.append(getsess().run(self._losses + (self._train,), fd)[:-1])
+                mblossvals.append(getsess().run(self._losses + (self._train,) + (self.merged_summary_op,), fd)[:-1])
 
         mblossvals = [mblossvals[0]]
         info.update(zip(['opt_' + ln for ln in self.loss_names], np.mean([mblossvals[0]], axis=0)))
@@ -212,6 +216,10 @@ class PpoOptimizer(object):
         info["total_secs"] = tnow - self.t_start
         info['tps'] = MPI.COMM_WORLD.Get_size() * self.rollout.nsteps * self.nenvs / (tnow - self.t_last_update)
         self.t_last_update = tnow
+
+        # New
+        if self.use_error :
+            info["error"] = self.rollout.buf_errs.mean()
 
         return info
 

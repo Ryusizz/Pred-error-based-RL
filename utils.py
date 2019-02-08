@@ -225,3 +225,10 @@ def tile_images(array, n_cols=None, max_images=None, div=1):
 
     return np.concatenate([row(i) for i in range(n_rows)], axis=0)
 
+# New
+def fc_regboard(name):
+    fc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, name)
+    tf.summary.histogram("kernel", fc_vars[0])
+    tf.summary.histogram("bias", fc_vars[1])
+    # tf.summary.histogram("act", layer1)
+

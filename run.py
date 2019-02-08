@@ -100,7 +100,8 @@ class Trainer(object):
             ext_coeff=hps['ext_coeff'],
             int_coeff=hps['int_coeff'],
             dynamics=self.dynamics,
-            use_error=hps['use_error']
+            use_error=hps['use_error'],
+            logger=logger
         )
 
         self.agent.to_report['aux'] = tf.reduce_mean(self.feature_extractor.loss)
@@ -167,7 +168,7 @@ def get_experiment_environment(**args):
 
     logger_context = logger.scoped_configure(dir=None,
                                              format_strs=['stdout', 'log',
-                                                          'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
+                                                          'csv', 'tensorboard'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
     tf_context = setup_tensorflow_session()
     return logger_context, tf_context
 
@@ -216,7 +217,10 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--use_error', type=int, default=1)
+    parser.add_argument('--use_error', type=int, default=1) # New
+    parser.add_argument('--use_tboard', type=int, default=1) # New
+    parser.add_argument('--tboard_period', type=int, default=100) # New
+
 
     args = parser.parse_args()
 

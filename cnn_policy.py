@@ -1,7 +1,7 @@
 import tensorflow as tf
 from baselines.common.distributions import make_pdtype
 
-from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten_first_dim
+from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten_first_dim, fc_regboard
 
 
 class CnnPolicy(object):
@@ -112,7 +112,8 @@ class PredErrorPolicy(CnnPolicy):
                 print(self.pred_error.shape)
                 x = tf.concat([self.flat_features, self.flat_pred_error], axis=1)
                 # x = fc(self.flat_features, units=hidsize, activation=activ)
-                x = fc(x, units=hidsize, activation=activ)
+                x = fc(x, units=hidsize, activation=activ, name="pol_fc1")
+                fc_regboard("pol_fc1")
                 x = fc(x, units=hidsize, activation=activ)
                 pdparam = fc(x, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(x, name='value_function_output', units=1, activation=None)
