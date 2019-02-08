@@ -22,9 +22,6 @@ from utils import random_agent_ob_mean_std
 from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_robo_hockey, \
     make_multi_pong, AddRandomStateToInfo, MaxAndSkipEnv, ProcessFrame84, ExtraTimeLimit
 
-# hidsize = 512
-# feat_dim = 512
-
 def start_experiment(**args):
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
 
@@ -35,6 +32,11 @@ def start_experiment(**args):
     with log, tf_sess:
         logdir = logger.get_dir()
         print("results will be saved to ", logdir)
+        with open("{}/args.txt".format(logdir)) as argfile:
+            print("saving argments...")
+            for k, v in args.itmes():
+                argfile.write(str(k) + ' >>> ' + str(v) + '\n')
+
         trainer.train()
 
 
