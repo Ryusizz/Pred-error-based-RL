@@ -22,7 +22,7 @@ class PpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, dynamics, use_error, logger):
+                 nsteps_per_seg, nsegs_per_env, dynamics, use_error, logger, use_tboard, tboard_period):
         self.dynamics = dynamics
         with tf.variable_scope(scope):
             self.use_recorder = True
@@ -45,6 +45,8 @@ class PpoOptimizer(object):
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
             self.use_error = use_error # New
+            self.use_tboard = use_tboard # New
+            self.tboard_period = tboard_period # New
             self.ph_adv = tf.placeholder(tf.float32, [None, None])
             self.ph_ret = tf.placeholder(tf.float32, [None, None])
             self.ph_rews = tf.placeholder(tf.float32, [None, None])
@@ -71,9 +73,11 @@ class PpoOptimizer(object):
             self.to_report = {'tot': self.total_loss, 'pg': pg_loss, 'vf': vf_loss, 'ent': entropy,
                               'approxkl': approxkl, 'clipfrac': clipfrac}
 
-            self.summary_writer = tf.summary.FileWriter(logdir, graph=getsess()) # New
-            self.merged_summary_op = tf.summary.merge_all() # New
-            self.log_dir = logger.get_dir()
+            self.logdir = logger.get_dir()
+            if self.use_tboard:
+                self.summary_writer = tf.summary.FileWriter(self.logdir, graph=getsess()) # New
+                self.merged_summary_op = tf.summary.merge_all() # New
+
 
     def start_interaction(self, env_fns, dynamics, nlump=2):
         self.loss_names, self._losses = zip(*list(self.to_report.items()))
@@ -200,9 +204,14 @@ class PpoOptimizer(object):
                 mbenvinds = envinds[start:end]
                 fd = {ph: buf[mbenvinds] for (ph, buf) in ph_buf}
                 fd.update({self.ph_lr: self.lr, self.ph_cliprange: self.cliprange})
-                mblossvals.append(getsess().run(self._losses + (self._train,) + (self.merged_summary_op,), fd)[:-1])
+                mblossvals.append(getsess().run(self._losses + (self._train,), fd)[:-1])
+                if self.use_tboard and self.n_updates % self.tboard_period == 0 :
+                    summary = getsess().run(self.merged_summary_op, fd) # New
+                    self.summary_writer.add_summary(summary, self.rollout.stats["tcount"]) # New
 
         mblossvals = [mblossvals[0]]
+        # print(self.loss_names)
+        # print(np.mean([mblossvals[0]], axis=0))
         info.update(zip(['opt_' + ln for ln in self.loss_names], np.mean([mblossvals[0]], axis=0)))
         info["rank"] = MPI.COMM_WORLD.Get_rank()
         self.n_updates += 1

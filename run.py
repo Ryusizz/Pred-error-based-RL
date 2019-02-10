@@ -32,9 +32,9 @@ def start_experiment(**args):
     with log, tf_sess:
         logdir = logger.get_dir()
         print("results will be saved to ", logdir)
-        with open("{}/args.txt".format(logdir)) as argfile:
+        with open("{}/args.txt".format(logdir), 'w') as argfile:
             print("saving argments...")
-            for k, v in args.itmes():
+            for k, v in args.items():
                 argfile.write(str(k) + ' >>> ' + str(v) + '\n')
 
         trainer.train()
@@ -63,6 +63,7 @@ class Trainer(object):
             ob_std=self.ob_std,
             layernormalize=False,
             nl=tf.nn.leaky_relu,
+            use_tboard=hps['use_tboard']
         )
 
         self.feature_extractor = {"none": FeatureExtractor,
@@ -101,7 +102,9 @@ class Trainer(object):
             int_coeff=hps['int_coeff'],
             dynamics=self.dynamics,
             use_error=hps['use_error'],
-            logger=logger
+            logger=logger,
+            use_tboard=hps['use_tboard'],
+            tboard_period=hps['tboard_period']
         )
 
         self.agent.to_report['aux'] = tf.reduce_mean(self.feature_extractor.loss)
@@ -168,13 +171,13 @@ def get_experiment_environment(**args):
 
     logger_context = logger.scoped_configure(dir=None,
                                              format_strs=['stdout', 'log',
-                                                          'csv', 'tensorboard'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
+                                                          'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
     tf_context = setup_tensorflow_session()
     return logger_context, tf_context
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='BeamRiderNoFrameskip-v4',
+    parser.add_argument('--env', help='environment ID', default='SpaceInvadersNoFrameskip-v4',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=4500, type=int)
     parser.add_argument('--env_kind', type=str, default="atari")
@@ -190,7 +193,7 @@ def add_optimization_params(parser):
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--ent_coeff', type=float, default=0.001)
     parser.add_argument('--nepochs', type=int, default=3)
-    parser.add_argument('--num_timesteps', type=int, default=int(1e8))
+    parser.add_argument('--num_timesteps', type=int, default=int(4e7))
 
 
 def add_rollout_params(parser):
@@ -208,7 +211,7 @@ if __name__ == '__main__':
     add_optimization_params(parser)
     add_rollout_params(parser)
 
-    parser.add_argument('--exp_name', type=str, default='')
+    parser.add_argument('--exp_name', type=str, default='test')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--dyn_from_pixels', type=int, default=0)
     parser.add_argument('--use_news', type=int, default=0)
@@ -219,7 +222,7 @@ if __name__ == '__main__':
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
     parser.add_argument('--use_error', type=int, default=1) # New
     parser.add_argument('--use_tboard', type=int, default=1) # New
-    parser.add_argument('--tboard_period', type=int, default=100) # New
+    parser.add_argument('--tboard_period', type=int, default=20) # New
 
 
     args = parser.parse_args()

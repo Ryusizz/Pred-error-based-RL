@@ -1,4 +1,5 @@
 import tensorflow as tf
+import os
 from baselines.common.distributions import make_pdtype
 
 from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten_first_dim, fc_regboard
@@ -6,13 +7,14 @@ from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten
 
 class CnnPolicy(object):
     def __init__(self, ob_space, ac_space, hidsize,
-                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy"):
+                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy", use_tboard=0):
         if layernormalize:
             print("Warning: policy is operating on top of layer-normed features. It might slow down the training.")
         self.layernormalize = layernormalize
         self.nl = nl
         self.ob_mean = ob_mean
         self.ob_std = ob_std
+        self.use_tboard = use_tboard
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
@@ -33,6 +35,11 @@ class CnnPolicy(object):
 
             with tf.variable_scope(scope, reuse=False):
                 x = fc(self.flat_features, units=hidsize, activation=activ)
+                if self.use_tboard:
+                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0')  # New
+                    tf.summary.histogram("kernel", weights)  # New
+                    bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0')  # New
+                    tf.summary.histogram("bias", bias)  # New
                 x = fc(x, units=hidsize, activation=activ)
                 pdparam = fc(x, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(x, name='value_function_output', units=1, activation=None)
@@ -67,13 +74,14 @@ class CnnPolicy(object):
 # New
 class PredErrorPolicy(CnnPolicy):
     def __init__(self, ob_space, ac_space, hidsize,
-                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy"):
+                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy", use_tboard=0):
         if layernormalize:
             print("Warning: policy is operating on top of layer-normed features. It might slow down the training.")
         self.layernormalize = layernormalize
         self.nl = nl
         self.ob_mean = ob_mean
         self.ob_std = ob_std
+        self.use_tboard = use_tboard
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
@@ -113,7 +121,13 @@ class PredErrorPolicy(CnnPolicy):
                 x = tf.concat([self.flat_features, self.flat_pred_error], axis=1)
                 # x = fc(self.flat_features, units=hidsize, activation=activ)
                 x = fc(x, units=hidsize, activation=activ, name="pol_fc1")
-                fc_regboard("pol_fc1")
+                # fc_regboard("pol_fc1")
+                # fc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "pol_fc1")
+                if self.use_tboard:
+                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
+                    tf.summary.histogram("kernel", weights) # New
+                    bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
+                    tf.summary.histogram("bias", bias) # New
                 x = fc(x, units=hidsize, activation=activ)
                 pdparam = fc(x, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(x, name='value_function_output', units=1, activation=None)
