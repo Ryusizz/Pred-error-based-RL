@@ -9,7 +9,7 @@ from utils import unflatten_first_dim
 
 class Rollout(object):
     def __init__(self, ob_space, ac_space, nenvs, nsteps_per_seg, nsegs_per_env, nlumps, envs, policy,
-                 int_rew_coeff, ext_rew_coeff, record_rollouts, dynamics, use_error):
+                 int_rew_coeff, ext_rew_coeff, record_rollouts, dynamics, policy_mode):
         self.nenvs = nenvs
         self.nsteps_per_seg = nsteps_per_seg
         self.nsegs_per_env = nsegs_per_env
@@ -21,7 +21,7 @@ class Rollout(object):
         self.envs = envs
         self.policy = policy
         self.dynamics = dynamics
-        self.use_error = use_error
+        self.policy_mode = policy_mode
 
         self.reward_fun = lambda ext_rew, int_rew: ext_rew_coeff * np.clip(ext_rew, -1., 1.) + int_rew_coeff * int_rew
 
@@ -94,7 +94,7 @@ class Rollout(object):
 
             sli = slice(l * self.lump_stride, (l + 1) * self.lump_stride)
 
-            if self.use_error :
+            if self.policy_mode in ['naiveerr', 'erratt'] :
                 acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, self.err_last)
             else :
                 acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs)
@@ -107,7 +107,7 @@ class Rollout(object):
             self.buf_vpreds[sli, t] = vpreds
             self.buf_nlps[sli, t] = nlps
             self.buf_acs[sli, t] = acs
-            if self.use_error :
+            if self.policy_mode in ['naiveerr', 'erratt'] :
                 if t == 0 :
                     self.buf_errs[sli, t] = self.buf_errs_last[sli]
                 elif t < self.nsteps - 1 :
@@ -141,7 +141,7 @@ class Rollout(object):
                 if t == self.nsteps - 1:
                     self.buf_new_last[sli] = nextnews
                     self.buf_ext_rews[sli, t] = ext_rews
-                    if self.use_error :
+                    if self.policy_mode in ['naiveerr', 'erratt'] :
                         a = np.expand_dims(obs, 1)
                         b = np.expand_dims(nextobs, 1)
                         c = np.expand_dims(acs, 1)

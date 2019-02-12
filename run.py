@@ -15,7 +15,7 @@ from baselines.common.atari_wrappers import NoopResetEnv, FrameStack
 from mpi4py import MPI
 
 from auxiliary_tasks import FeatureExtractor, InverseDynamics, VAE, JustPixels
-from cnn_policy import CnnPolicy, PredErrorPolicy
+from cnn_policy import CnnPolicy, PredErrorPolicy, ErrorAttentionPolicy
 from cppo_agent import PpoOptimizer
 from dynamics import Dynamics, UNet
 from utils import random_agent_ob_mean_std
@@ -48,11 +48,9 @@ class Trainer(object):
         self.num_timesteps = num_timesteps
         self._set_env_vars()
 
-        if hps['use_error'] :
-            self.policy = PredErrorPolicy
-        else :
-            self.policy = CnnPolicy
-
+        self.policy = {"none" : CnnPolicy,
+                       "naiveerr" : PredErrorPolicy,
+                       "erratt" : ErrorAttentionPolicy}[hps['policy_mode']]
         self.policy = self.policy(
             scope='pol',
             ob_space=self.ob_space,
@@ -101,8 +99,8 @@ class Trainer(object):
             ext_coeff=hps['ext_coeff'],
             int_coeff=hps['int_coeff'],
             dynamics=self.dynamics,
-            use_error=hps['use_error'],
-            logger=logger,
+            policy_mode=hps['policy_mode'],
+            logdir=logger.get_dir(),
             use_tboard=hps['use_tboard'],
             tboard_period=hps['tboard_period']
         )
@@ -220,9 +218,10 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--use_error', type=int, default=1) # New
+    parser.add_argument('--policy_mode', type=str, default="erratt",
+                        choices=["none", "naiveerr", "erratt"]) # New
     parser.add_argument('--use_tboard', type=int, default=1) # New
-    parser.add_argument('--tboard_period', type=int, default=20) # New
+    parser.add_argument('--tboard_period', type=int, default=1) # New
 
 
     args = parser.parse_args()

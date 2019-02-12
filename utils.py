@@ -143,6 +143,14 @@ def small_convnet(x, nl, feat_dim, last_nl, layernormalize, batchnorm=False):
         x = layernorm(x)
     return x
 
+#New
+def small_convnet_wodense(x, nl, batchnorm=False):
+    bn = tf.layers.batch_normalization if batchnorm else lambda x: x
+    x = bn(tf.layers.conv2d(x, filters=32, kernel_size=8, strides=(4, 4), activation=nl))
+    x = bn(tf.layers.conv2d(x, filters=64, kernel_size=4, strides=(2, 2), activation=nl))
+    x = bn(tf.layers.conv2d(x, filters=64, kernel_size=3, strides=(1, 1), activation=nl))
+    # x = tf.reshape(x, (-1, np.prod(x.get_shape().as_list()[1:])))
+    return x
 
 def small_deconvnet(z, nl, ch, positional_bias):
     sh = (8, 8, 64)

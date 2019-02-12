@@ -22,7 +22,7 @@ class PpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, dynamics, use_error, logger, use_tboard, tboard_period):
+                 nsteps_per_seg, nsegs_per_env, dynamics, policy_mode, logdir, use_tboard, tboard_period):
         self.dynamics = dynamics
         with tf.variable_scope(scope):
             self.use_recorder = True
@@ -44,7 +44,7 @@ class PpoOptimizer(object):
             self.use_news = use_news
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
-            self.use_error = use_error # New
+            self.policy_mode = policy_mode # New
             self.use_tboard = use_tboard # New
             self.tboard_period = tboard_period # New
             self.ph_adv = tf.placeholder(tf.float32, [None, None])
@@ -73,9 +73,10 @@ class PpoOptimizer(object):
             self.to_report = {'tot': self.total_loss, 'pg': pg_loss, 'vf': vf_loss, 'ent': entropy,
                               'approxkl': approxkl, 'clipfrac': clipfrac}
 
-            self.logdir = logger.get_dir()
-            if self.use_tboard:
+            self.logdir = logdir #logger.get_dir()
+            if self.use_tboard and MPI.COMM_WORLD.Get_rank() == 0:
                 self.summary_writer = tf.summary.FileWriter(self.logdir, graph=getsess()) # New
+                print("tensorboard dir : ", logdir)
                 self.merged_summary_op = tf.summary.merge_all() # New
 
 
@@ -112,7 +113,7 @@ class PpoOptimizer(object):
                                ext_rew_coeff=self.ext_coeff,
                                record_rollouts=self.use_recorder,
                                dynamics=dynamics,
-                               use_error=self.use_error)
+                               policy_mode=self.policy_mode)
 
         self.buf_advs = np.zeros((nenvs, self.rollout.nsteps), np.float32)
         self.buf_rets = np.zeros((nenvs, self.rollout.nsteps), np.float32)
@@ -193,7 +194,7 @@ class PpoOptimizer(object):
             (self.dynamics.last_ob,
              self.rollout.buf_obs_last.reshape([self.nenvs * self.nsegs_per_env, 1, *self.ob_space.shape]))
         ])
-        if self.use_error :
+        if self.policy_mode in ['naiveerr', 'erratt'] :
             ph_buf.extend([(self.stochpol.pred_error, resh(self.rollout.buf_errs))]) # New
         mblossvals = []
 
@@ -205,9 +206,7 @@ class PpoOptimizer(object):
                 fd = {ph: buf[mbenvinds] for (ph, buf) in ph_buf}
                 fd.update({self.ph_lr: self.lr, self.ph_cliprange: self.cliprange})
                 mblossvals.append(getsess().run(self._losses + (self._train,), fd)[:-1])
-                if self.use_tboard and self.n_updates % self.tboard_period == 0 :
-                    summary = getsess().run(self.merged_summary_op, fd) # New
-                    self.summary_writer.add_summary(summary, self.rollout.stats["tcount"]) # New
+
 
         mblossvals = [mblossvals[0]]
         # print(self.loss_names)
@@ -227,8 +226,15 @@ class PpoOptimizer(object):
         self.t_last_update = tnow
 
         # New
-        if self.use_error :
+        if self.policy_mode in ['naiveerr', 'erratt'] :
             info["error"] = self.rollout.buf_errs.mean()
+
+        if self.use_tboard and self.n_updates % self.tboard_period == 0:
+            summary = getsess().run(self.merged_summary_op, fd)  # New
+            self.summary_writer.add_summary(summary, self.rollout.stats["tcount"])  # New
+            for k, v in info.items():
+                summary = tf.Summary(value=[tf.Summary.Value(tag=k, simple_value=v),])
+                self.summary_writer.add_summary(summary, self.rollout.stats["tcount"])
 
         return info
 
