@@ -229,7 +229,7 @@ class PpoOptimizer(object):
         if self.policy_mode in ['naiveerr', 'erratt'] :
             info["error"] = self.rollout.buf_errs.mean()
 
-        if self.use_tboard and self.n_updates % self.tboard_period == 0:
+        if self.use_tboard and self.n_updates % self.tboard_period == 0 and MPI.COMM_WORLD.Get_rank() == 0:
             summary = getsess().run(self.merged_summary_op, fd)  # New
             self.summary_writer.add_summary(summary, self.rollout.stats["tcount"])  # New
             for k, v in info.items():
