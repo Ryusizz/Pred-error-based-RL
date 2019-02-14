@@ -190,30 +190,51 @@ class ErrorAttentionPolicy(CnnPolicy):
                 wid = self.flat_features.get_shape().as_list()[1]
                 hei = self.flat_features.get_shape().as_list()[2]
                 ch = self.flat_features.get_shape().as_list()[3]
+                print(wid, hei, ch)
                 q = fc(self.flat_pred_error, units=hidsize, activation=activ, use_bias=False, name="query_embed")                   # (nenvs*nsteps, hidsize)
                 if self.use_tboard:
                     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(q.name)[0] + '/kernel:0') # New
                     tf.summary.histogram("query_kernel", weights) # New
                 q = tf.expand_dims(q, 1)                                                                        # (nenvs*nsteps, 1, hidsize)
-                q = layernorm(q)
+                # q = layernorm(q)
                 k = tf.reshape(self.flat_features, (-1, ch))                                               # (nenvs*nsteps*width*height, chsize)
                 k = fc(k, units=hidsize, activation=activ, use_bias=False, name="key_embed")                                      # (nenvs*nsteps*width*height, hidsize)
                 if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(k.name)[0] + '/kernel:0') # New
-                    tf.summary.histogram("key_kernel", weights) # New
+                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(k.name)[0] + '/kernel:0')
+                    tf.summary.histogram("key_kernel", weights)
+
+                v = attention.add_positional_embedding_nd(tf.reshape(k, (-1, wid, hei, hidsize)),
+                                                          max_length=7,
+                                                          name="pos_embed")
                 k = tf.reshape(k, (-1, wid*hei, hidsize))                                                       # (nenvs*nsteps, width*height, hidsize)
-                k = layernorm(k)
-                # att = fc(q, units=features.shape, activation=tf.nn.tanh)                                      # (nenvs*nsteps, width*height)
-                # alpha = tf.nn.softmax(att)                                                                    # (nenvs*nsteps, width*height)
-                # x = tf.reduce_sum(tf.multiply(k, tf.expand_dims(alpha, 2)), 1)                                # (nenvs*nsteps, hidsize)
-                x = attention.scaled_dot_product_attention_simple(q, k, k, bias=None)                           # (nenvs*nsteps, 1, hidsize)
+                v = tf.reshape(v, (-1, wid*hei, hidsize))                                                        # (n, width*height, hidsize)
+                # k = layernorm(k)
+
+                x = attention.scaled_dot_product_attention_simple(q, k, v, bias=None)                           # (nenvs*nsteps, 1, hidsize)
+
+                # num_heads = 8
+                # x_list = []
+                # for _ in range(num_heads):
+                #     Q = tf.reshape(fc(q, units=ch, activation=activ, use_bias=False), (-1, 1, ch))
+                #     K = tf.reshape(fc(k, units=ch, activation=activ, use_bias=False), (-1, wid*hei, ch))
+                #     V = tf.reshape(fc(v, units=ch, activation=activ, use_bias=False), (-1, wid*hei, ch))
+                #     x_list.append(attention.scaled_dot_product_attention_simple(Q, K, V, bias=None))
+                #     x = tf.concat([attention.scaled_dot_product_attention_simple(fc(q, units=ch, activation=activ, use_bias=False),
+                #                                                              fc(k, units=ch, activation=activ, use_bias=False),
+                #                                                              fc(k, units=ch, activation=activ, use_bias=False), bias=None) for _ in range(num_heads)], axis=2)  # (nenvs*nsteps, 1, chsize*num_heads)
+                # x = tf.concat(x_list, axis=2)
+                # x = tf.layers.dropout(x, 0.2, training=tf.convert_to_tensor(True))
                 x = tf.reshape(x, (-1, hidsize))
+                x = fc(x, units=hidsize, activation=activ, use_bias=False)
+                x = layernorm(x)
+
                 x = fc(x, units=hidsize, activation=activ)
                 if self.use_tboard:
                     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
                     tf.summary.histogram("fc1_kernel", weights) # New
                     bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
                     tf.summary.histogram("fc1_bias", bias) # New
+
                 x = fc(x, units=hidsize, activation=activ)
                 if self.use_tboard:
                     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New

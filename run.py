@@ -177,7 +177,7 @@ def get_experiment_environment(**args):
 def add_environments_params(parser):
     parser.add_argument('--env', help='environment ID', default='SpaceInvadersNoFrameskip-v4',
                         type=str)
-    parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=10000, type=int)
+    parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=15000, type=int)
     parser.add_argument('--env_kind', type=str, default="atari")
     parser.add_argument('--noop_max', type=int, default=30)
 
@@ -191,7 +191,7 @@ def add_optimization_params(parser):
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--ent_coeff', type=float, default=0.001)
     parser.add_argument('--nepochs', type=int, default=3)
-    parser.add_argument('--num_timesteps', type=int, default=int(1e8))
+    parser.add_argument('--num_timesteps', type=int, default=int(2e8))
 
 
 def add_rollout_params(parser):
