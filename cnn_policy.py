@@ -195,20 +195,26 @@ class ErrorAttentionPolicy(CnnPolicy):
                 if self.use_tboard:
                     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(q.name)[0] + '/kernel:0') # New
                     tf.summary.histogram("query_kernel", weights) # New
-                q = tf.expand_dims(q, 1)                                                                        # (nenvs*nsteps, 1, hidsize)
-                # q = layernorm(q)
+                q = layernorm(q)
+
                 k = tf.reshape(self.flat_features, (-1, ch))                                               # (nenvs*nsteps*width*height, chsize)
                 k = fc(k, units=hidsize, activation=activ, use_bias=False, name="key_embed")                                      # (nenvs*nsteps*width*height, hidsize)
                 if self.use_tboard:
                     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(k.name)[0] + '/kernel:0')
                     tf.summary.histogram("key_kernel", weights)
+                k = layernorm(k)
+
+                q_ = tf.reduce_mean(self.flat_features, axis=[1, 2])
+                q_ = fc(q_, units=hidsize, activation=activ, use_bias=False, name="key2_embed")
+                q_ = layernorm(q_)
+                q = q + q_  # Add observation information
+                q = tf.expand_dims(q, 1)                                            # (nenvs*nsteps, 1, hidsize)
 
                 v = attention.add_positional_embedding_nd(tf.reshape(k, (-1, wid, hei, hidsize)),
                                                           max_length=7,
                                                           name="pos_embed")
                 k = tf.reshape(k, (-1, wid*hei, hidsize))                                                       # (nenvs*nsteps, width*height, hidsize)
                 v = tf.reshape(v, (-1, wid*hei, hidsize))                                                        # (n, width*height, hidsize)
-                # k = layernorm(k)
 
                 x = attention.scaled_dot_product_attention_simple(q, k, v, bias=None)                           # (nenvs*nsteps, 1, hidsize)
 
