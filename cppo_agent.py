@@ -227,7 +227,11 @@ class PpoOptimizer(object):
 
         # New
         if self.policy_mode in ['naiveerr', 'erratt'] :
-            info["error"] = self.rollout.buf_errs.mean()
+            # print("normal:", self.rollout.buf_errs)
+            # print("power:", np.power(self.rollout.buf_errs, 2))
+            # print(self.rollout.buf_errs.mean())
+            # print(np.sqrt(np.power(self.rollout.buf_errs, 2).mean()))
+            info["error"] = np.sqrt(np.power(self.rollout.buf_errs, 2).mean())
 
         if self.use_tboard and self.n_updates % self.tboard_period == 0 and MPI.COMM_WORLD.Get_rank() == 0:
             summary = getsess().run(self.merged_summary_op, fd)  # New

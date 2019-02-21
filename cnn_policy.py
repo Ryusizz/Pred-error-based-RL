@@ -190,7 +190,7 @@ class ErrorAttentionPolicy(CnnPolicy):
                 wid = self.flat_features.get_shape().as_list()[1]
                 hei = self.flat_features.get_shape().as_list()[2]
                 ch = self.flat_features.get_shape().as_list()[3]
-                print(wid, hei, ch)
+                # print(wid, hei, ch)
                 q = fc(self.flat_pred_error, units=hidsize, activation=activ, use_bias=False, name="query_embed")                   # (nenvs*nsteps, hidsize)
                 if self.use_tboard:
                     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(q.name)[0] + '/kernel:0') # New
