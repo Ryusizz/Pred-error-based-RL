@@ -111,7 +111,8 @@ class Rollout(object):
             self.buf_vpreds[sli, t] = vpreds
             self.buf_nlps[sli, t] = nlps
             self.buf_acs[sli, t] = acs
-            self.buf_errs[sli, t] = errs
+            if self.policy_mode in ['naiveerr', 'erratt']:
+                self.buf_errs[sli, t] = errs
 
             if t > 0:
                 self.buf_ext_rews[sli, t - 1] = prevrews
