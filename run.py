@@ -82,7 +82,8 @@ class Trainer(object):
         self.dynamics = Dynamics if hps['feat_learning'] != 'pix2pix' else UNet
         self.dynamics = self.dynamics(auxiliary_task=self.feature_extractor,
                                       predict_from_pixels=hps['dyn_from_pixels'],
-                                      feat_dim=512)
+                                      feat_dim=512,
+                                      use_tboard=hps['use_tboard'])
 
         self.agent = PpoOptimizer(
             scope='ppo',
