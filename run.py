@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import datetime
+
 try:
     from OpenGL import GLU
 except:
@@ -24,13 +26,16 @@ from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_
 
 def start_experiment(**args):
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
+    logdir = osp.join("/result/", args['env'], datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"))
+    log = logger.scoped_configure(dir=logdir, format_strs=['stdout', 'log', 'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
 
     trainer = Trainer(make_env=make_env,
                       num_timesteps=args['num_timesteps'], hps=args,
-                      envs_per_process=args['envs_per_process'])
-    log, tf_sess = get_experiment_environment(**args)
+                      envs_per_process=args['envs_per_process'],
+                      logdir=logdir)
+    tf_sess = get_experiment_environment(**args)
     with log, tf_sess:
-        logdir = logger.get_dir()
+        # logdir = logger.get_dir()
         print("results will be saved to ", logdir)
         with open("{}/args.txt".format(logdir), 'w') as argfile:
             print("saving argments...")
@@ -41,7 +46,7 @@ def start_experiment(**args):
 
 
 class Trainer(object):
-    def __init__(self, make_env, hps, num_timesteps, envs_per_process):
+    def __init__(self, make_env, hps, num_timesteps, envs_per_process, logdir):
         self.make_env = make_env
         self.hps = hps
         self.envs_per_process = envs_per_process
@@ -100,7 +105,7 @@ class Trainer(object):
             int_coeff=hps['int_coeff'],
             dynamics=self.dynamics,
             policy_mode=hps['policy_mode'],
-            logdir=logger.get_dir(),
+            logdir=logdir,
             use_tboard=hps['use_tboard'],
             tboard_period=hps['tboard_period']
         )
@@ -167,11 +172,8 @@ def get_experiment_environment(**args):
     set_global_seeds(process_seed)
     setup_mpi_gpus()
 
-    logger_context = logger.scoped_configure(dir=None,
-                                             format_strs=['stdout', 'log',
-                                                          'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
     tf_context = setup_tensorflow_session()
-    return logger_context, tf_context
+    return tf_context
 
 
 def add_environments_params(parser):

@@ -57,6 +57,9 @@ class Dynamics(object):
 
             def residual(x):
                 res = tf.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
+                if self.use_tboard:
+                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(res.name)[0] + 'kernel:0')
+                    tf.summary.histogram("dynamics_kernel1", weights)
                 res = tf.layers.dense(add_ac(res), self.hidsize, activation=None)
                 return x + res
 
