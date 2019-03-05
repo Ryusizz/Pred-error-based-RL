@@ -17,15 +17,18 @@ class FeatureExtractor(object):
         self.obs = self.policy.ph_ob
         self.ob_mean = self.policy.ob_mean
         self.ob_std = self.policy.ob_std
-        with tf.variable_scope(scope):
-            self.last_ob = tf.placeholder(dtype=tf.int32,
-                                          shape=(None, 1) + self.ob_space.shape, name='last_ob')
-            self.next_ob = tf.concat([self.obs[:, 1:], self.last_ob], 1)
 
-            if features_shared_with_policy:
+        self.last_ob = tf.placeholder(dtype=tf.int32,
+                                      shape=(None, 1) + self.ob_space.shape, name='last_ob')
+        self.next_ob = tf.concat([self.obs[:, 1:], self.last_ob], 1)
+
+        if features_shared_with_policy:
+            with tf.variable_scope('pol'):
                 self.features = self.policy.features
                 self.last_features = self.policy.get_features(self.last_ob, reuse=True)
-            else:
+
+        with tf.variable_scope(scope):
+            if not features_shared_with_policy:
                 self.features = self.get_features(self.obs, reuse=False)
                 self.last_features = self.get_features(self.last_ob, reuse=True)
             self.next_features = tf.concat([self.features[:, 1:], self.last_features], 1)

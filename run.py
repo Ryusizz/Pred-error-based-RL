@@ -75,7 +75,7 @@ class Trainer(object):
                                   "vaenonsph": partial(VAE, spherical_obs=False),
                                   "pix2pix": JustPixels}[hps['feat_learning']]
         self.feature_extractor = self.feature_extractor(policy=self.policy,
-                                                        features_shared_with_policy=False,
+                                                        features_shared_with_policy=True,
                                                         feat_dim=512,
                                                         layernormalize=hps['layernorm'])
 
@@ -178,7 +178,7 @@ def get_experiment_environment(**args):
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='SpaceInvadersNoFrameskip-v4',
+    parser.add_argument('--env', help='environment ID', default='RobotankNoFrameskip-v4',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=15000, type=int)
     parser.add_argument('--env_kind', type=str, default="atari")
@@ -216,12 +216,12 @@ if __name__ == '__main__':
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--dyn_from_pixels', type=int, default=0)
     parser.add_argument('--use_news', type=int, default=0)
-    parser.add_argument('--ext_coeff', type=float, default=0.)
-    parser.add_argument('--int_coeff', type=float, default=1.)
+    parser.add_argument('--ext_coeff', type=float, default=1.)
+    parser.add_argument('--int_coeff', type=float, default=0.)
     parser.add_argument('--layernorm', type=int, default=0)
-    parser.add_argument('--feat_learning', type=str, default="idf",
+    parser.add_argument('--feat_learning', type=str, default="none",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--policy_mode', type=str, default="erratt",
+    parser.add_argument('--policy_mode', type=str, default="naiveerr",
                         choices=["none", "naiveerr", "erratt"]) # New
     parser.add_argument('--use_tboard', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=1) # New
