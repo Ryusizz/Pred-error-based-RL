@@ -75,7 +75,7 @@ class Trainer(object):
                                   "vaenonsph": partial(VAE, spherical_obs=False),
                                   "pix2pix": JustPixels}[hps['feat_learning']]
         self.feature_extractor = self.feature_extractor(policy=self.policy,
-                                                        features_shared_with_policy=True,
+                                                        features_shared_with_policy=hps['feat_sharedWpol'],
                                                         feat_dim=512,
                                                         layernormalize=hps['layernorm'])
 
@@ -225,6 +225,7 @@ if __name__ == '__main__':
                         choices=["none", "naiveerr", "erratt"]) # New
     parser.add_argument('--use_tboard', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=1) # New
+    parser.add_argument('--feat_sharedWpol', type=bool, default=False) # New
 
 
     args = parser.parse_args()
