@@ -225,7 +225,7 @@ if __name__ == '__main__':
                         choices=["none", "naiveerr", "erratt"]) # New
     parser.add_argument('--use_tboard', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=1) # New
-    parser.add_argument('--feat_sharedWpol', type=bool, default=False) # New
+    parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
 
 
     args = parser.parse_args()
