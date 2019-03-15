@@ -8,12 +8,12 @@ from utils import small_convnet, flatten_two_dims, unflatten_first_dim, getsess,
 
 
 class Dynamics(object):
-    def __init__(self, auxiliary_task, predict_from_pixels, use_tboard, feat_dim=None, scope='dynamics'):
+    def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None, scope='dynamics'):
         self.scope = scope
         self.auxiliary_task = auxiliary_task
         self.hidsize = self.auxiliary_task.hidsize
         self.feat_dim = feat_dim
-        self.use_tboard = use_tboard
+        # self.full_tensorboard_log = full_tensorboard_log
         self.obs = self.auxiliary_task.obs
         self.last_ob = self.auxiliary_task.last_ob
         self.ac = self.auxiliary_task.ac
@@ -60,9 +60,9 @@ class Dynamics(object):
 
             def residual(x):
                 res = tf.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
-                if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(res.name)[0] + '/kernel:0')
-                    tf.summary.histogram("dynamics_kernel1", weights)
+                # if self.use_tboard:
+                #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(res.name)[0] + '/kernel:0')
+                #     tf.summary.histogram("dynamics_kernel1", weights)
                 res = tf.layers.dense(add_ac(res), self.hidsize, activation=None)
                 return x + res
 
@@ -76,8 +76,11 @@ class Dynamics(object):
     # def get_loss(self, x):
     #     return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, -1)
 
-    def calculate_loss(self, ob, last_ob, acs):
-        n_chunks = 8
+    def calculate_loss(self, ob, last_ob, acs, nminibatches=None):
+        if nminibatches is not None:
+            n_chunks = nminibatches
+        else:
+            n_chunks = 8
         n = ob.shape[0]
         chunk_size = n // n_chunks
         assert n % n_chunks == 0

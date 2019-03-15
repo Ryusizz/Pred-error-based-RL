@@ -9,14 +9,14 @@ import tensor2tensor.layers.common_attention as attention
 
 class CnnPolicy(object):
     def __init__(self, ob_space, ac_space, hidsize,
-                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy", use_tboard=0):
+                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy"):
         if layernormalize:
             print("Warning: policy is operating on top of layer-normed features. It might slow down the training.")
         self.layernormalize = layernormalize
         self.nl = nl
         self.ob_mean = ob_mean
         self.ob_std = ob_std
-        self.use_tboard = use_tboard
+        # self.full_tensorboard_log = full_tensorboard_log
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
@@ -37,11 +37,11 @@ class CnnPolicy(object):
 
             with tf.variable_scope(scope, reuse=False):
                 x = fc(self.flat_features, units=hidsize, activation=activ, name="pol_fc1")
-                if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0')  # New
-                    tf.summary.histogram("kernel", weights)  # New
-                    bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0')  # New
-                    tf.summary.histogram("bias", bias)  # New
+                # if self.use_tboard:
+                #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0')  # New
+                #     tf.summary.histogram("kernel", weights)  # New
+                #     bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0')  # New
+                #     tf.summary.histogram("bias", bias)  # New
                 x = fc(x, units=hidsize, activation=activ)
                 pdparam = fc(x, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(x, name='value_function_output', units=1, activation=None)
@@ -76,14 +76,14 @@ class CnnPolicy(object):
 # New
 class PredErrorPolicy(CnnPolicy):
     def __init__(self, ob_space, ac_space, hidsize,
-                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy", use_tboard=0):
+                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy"):
         if layernormalize:
             print("Warning: policy is operating on top of layer-normed features. It might slow down the training.")
         self.layernormalize = layernormalize
         self.nl = nl
         self.ob_mean = ob_mean
         self.ob_std = ob_std
-        self.use_tboard = use_tboard
+        # self.full_tensorboard_log = full_tensorboard_log
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
@@ -122,11 +122,11 @@ class PredErrorPolicy(CnnPolicy):
                 x = fc(x, units=hidsize, activation=activ, name="pol_fc1")
                 # fc_regboard("pol_fc1")
                 # fc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "pol_fc1")
-                if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
-                    tf.summary.histogram("kernel", weights) # New
-                    bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
-                    tf.summary.histogram("bias", bias) # New
+                # if self.use_tboard:
+                #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
+                #     tf.summary.histogram("kernel", weights) # New
+                #     bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
+                #     tf.summary.histogram("bias", bias) # New
                 x = fc(x, units=hidsize, activation=activ)
                 pdparam = fc(x, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(x, name='value_function_output', units=1, activation=None)
@@ -154,14 +154,14 @@ class PredErrorPolicy(CnnPolicy):
 #New
 class ErrorAttentionPolicy(CnnPolicy):
     def __init__(self, ob_space, ac_space, hidsize,
-                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy", use_tboard=0):
+                 ob_mean, ob_std, feat_dim, layernormalize, nl, scope="policy"):
         if layernormalize:
             print("Warning: policy is operating on top of layer-normed features. It might slow down the training.")
         self.layernormalize = layernormalize
         self.nl = nl
         self.ob_mean = ob_mean
         self.ob_std = ob_std
-        self.use_tboard = use_tboard
+        # self.use_tboard = use_tboard
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
@@ -192,16 +192,16 @@ class ErrorAttentionPolicy(CnnPolicy):
                 ch = self.flat_features.get_shape().as_list()[3]
                 # print(wid, hei, ch)
                 q = fc(self.flat_pred_error, units=hidsize, activation=activ, use_bias=False, name="query_embed")                   # (nenvs*nsteps, hidsize)
-                if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(q.name)[0] + '/kernel:0') # New
-                    tf.summary.histogram("query_kernel", weights) # New
+                # if self.use_tboard:
+                #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(q.name)[0] + '/kernel:0') # New
+                #     tf.summary.histogram("query_kernel", weights) # New
                 q = layernorm(q)
 
                 k = tf.reshape(self.flat_features, (-1, ch))                                               # (nenvs*nsteps*width*height, chsize)
                 k = fc(k, units=hidsize, activation=activ, use_bias=False, name="key_embed")                                      # (nenvs*nsteps*width*height, hidsize)
-                if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(k.name)[0] + '/kernel:0')
-                    tf.summary.histogram("key_kernel", weights)
+                # if self.use_tboard:
+                #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(k.name)[0] + '/kernel:0')
+                #     tf.summary.histogram("key_kernel", weights)
                 k = layernorm(k)
 
                 q_ = tf.reduce_mean(self.flat_features, axis=[1, 2])
@@ -235,18 +235,18 @@ class ErrorAttentionPolicy(CnnPolicy):
                 x = layernorm(x)
 
                 x = fc(x, units=hidsize, activation=activ)
-                if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
-                    tf.summary.histogram("fc1_kernel", weights) # New
-                    bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
-                    tf.summary.histogram("fc1_bias", bias) # New
+                # if self.use_tboard:
+                #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
+                #     tf.summary.histogram("fc1_kernel", weights) # New
+                #     bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
+                #     tf.summary.histogram("fc1_bias", bias) # New
 
                 x = fc(x, units=hidsize, activation=activ)
-                if self.use_tboard:
-                    weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
-                    tf.summary.histogram("fc2_kernel", weights) # New
-                    bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
-                    tf.summary.histogram("fc2_bias", bias) # New
+                # if self.use_tboard:
+                #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/kernel:0') # New
+                #     tf.summary.histogram("fc2_kernel", weights) # New
+                #     bias = tf.get_default_graph().get_tensor_by_name(os.path.split(x.name)[0] + '/bias:0') # New
+                #     tf.summary.histogram("fc2_bias", bias) # New
                 pdparam = fc(x, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(x, name='value_function_output', units=1, activation=None)
             pdparam = unflatten_first_dim(pdparam, sh)

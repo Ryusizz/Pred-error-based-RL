@@ -22,7 +22,7 @@ class PpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, dynamics, policy_mode, logdir, use_tboard, tboard_period):
+                 nsteps_per_seg, nsegs_per_env, dynamics, policy_mode, logdir, full_tensorboard_log, tboard_period):
         self.dynamics = dynamics
         with tf.variable_scope(scope):
             self.use_recorder = True
@@ -45,7 +45,7 @@ class PpoOptimizer(object):
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
             self.policy_mode = policy_mode # New
-            self.use_tboard = use_tboard # New
+            self.full_tensorboard_log = full_tensorboard_log # New
             self.tboard_period = tboard_period # New
             self.ph_adv = tf.placeholder(tf.float32, [None, None])
             self.ph_ret = tf.placeholder(tf.float32, [None, None])
@@ -74,7 +74,7 @@ class PpoOptimizer(object):
                               'approxkl': approxkl, 'clipfrac': clipfrac}
 
             self.logdir = logdir #logger.get_dir()
-            if self.use_tboard and MPI.COMM_WORLD.Get_rank() == 0:
+            if MPI.COMM_WORLD.Get_rank() == 0:
                 self.summary_writer = tf.summary.FileWriter(self.logdir, graph=getsess()) # New
                 print("tensorboard dir : ", logdir)
                 self.merged_summary_op = tf.summary.merge_all() # New
@@ -233,7 +233,7 @@ class PpoOptimizer(object):
             # print(np.sqrt(np.power(self.rollout.buf_errs, 2).mean()))
             info["error"] = np.sqrt(np.power(self.rollout.buf_errs, 2).mean())
 
-        if self.use_tboard and self.n_updates % self.tboard_period == 0 and MPI.COMM_WORLD.Get_rank() == 0:
+        if self.n_updates % self.tboard_period == 0 and MPI.COMM_WORLD.Get_rank() == 0:
             summary = getsess().run(self.merged_summary_op, fd)  # New
             self.summary_writer.add_summary(summary, self.rollout.stats["tcount"])  # New
             for k, v in info.items():
