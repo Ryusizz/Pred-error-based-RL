@@ -26,7 +26,7 @@ from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_
 
 def start_experiment(**args):
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
-    logdir = osp.join("/result/", args['env'], datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"))
+    logdir = osp.join("/result", args['env'], args['exp_name'], datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
     log = logger.scoped_configure(dir=logdir, format_strs=['stdout', 'log', 'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
 
     trainer = Trainer(make_env=make_env,
