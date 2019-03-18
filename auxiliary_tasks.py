@@ -4,13 +4,19 @@ from utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_di
 
 
 class FeatureExtractor(object):
-    def __init__(self, policy, features_shared_with_policy, feat_dim=None, layernormalize=None,
-                 scope='feature_extractor'):
+    def __init__(self, policy, features_shared_with_policy, n_env=None, feat_dim=None, layernormalize=None,
+                 scope='feature_extractor', reuse=False):
         self.scope = scope
         self.features_shared_with_policy = features_shared_with_policy
+        self.n_env = n_env
         self.feat_dim = feat_dim
         self.layernormalize = layernormalize
+        self.reuse = reuse
         self.policy = policy
+        # if actionpol is None:
+        #     self.actionpol = policy
+        # else:
+        #     self.actionpol = actionpol
         self.hidsize = policy.hidsize
         self.ob_space = policy.ob_space
         self.ac_space = policy.ac_space
@@ -18,8 +24,12 @@ class FeatureExtractor(object):
         self.ob_mean = self.policy.ob_mean
         self.ob_std = self.policy.ob_std
 
+        # if n_env is not None:
+        #     self.last_ob = tf.placeholder(dtype=tf.int32,
+        #                                   shape=(n_env, 1) + self.ob_space.shape, name='last_ob')
+        # else:
         self.last_ob = tf.placeholder(dtype=tf.int32,
-                                      shape=(None, 1) + self.ob_space.shape, name='last_ob')
+                                      shape=(n_env, 1) + self.ob_space.shape, name='last_ob')
         self.next_ob = tf.concat([self.obs[:, 1:], self.last_ob], 1)
 
         if features_shared_with_policy:
@@ -29,14 +39,17 @@ class FeatureExtractor(object):
 
         with tf.variable_scope(scope):
             if not features_shared_with_policy:
-                self.features = self.get_features(self.obs, reuse=False)
+                self.features = self.get_features(self.obs, reuse=self.reuse)
                 self.last_features = self.get_features(self.last_ob, reuse=True)
+                # self.ac_features = self.get_features(self.actionpol.ph_ob, reuse=True)
+                # self.ac_last_features = self.get_features(self.last_ob, reuse=True)
             self.next_features = tf.concat([self.features[:, 1:], self.last_features], 1)
+            # self.ac_next_features = tf.concat([self.ac_features[:, 1:], self.ac_last_features], 1)
 
             self.ac = self.policy.ph_ac
             self.scope = scope
 
-            self.loss = self.get_loss()
+            self.loss = self.get_loss(reuse=self.reuse)
 
     def get_features(self, x, reuse):
         nl = tf.nn.leaky_relu
@@ -51,18 +64,18 @@ class FeatureExtractor(object):
             x = unflatten_first_dim(x, sh)
         return x
 
-    def get_loss(self):
+    def get_loss(self, reuse=False):
         return tf.zeros((), dtype=tf.float32)
 
 
 class InverseDynamics(FeatureExtractor):
-    def __init__(self, policy, features_shared_with_policy, feat_dim=None, layernormalize=None):
+    def __init__(self, policy, features_shared_with_policy, feat_dim=None, layernormalize=None, reuse=False):
         super(InverseDynamics, self).__init__(scope="inverse_dynamics", policy=policy,
                                               features_shared_with_policy=features_shared_with_policy,
-                                              feat_dim=feat_dim, layernormalize=layernormalize)
+                                              feat_dim=feat_dim, layernormalize=layernormalize, reuse=reuse)
 
-    def get_loss(self):
-        with tf.variable_scope(self.scope):
+    def get_loss(self, reuse=False):
+        with tf.variable_scope(self.scope, reuse=reuse):
             x = tf.concat([self.features, self.next_features], 2)
             sh = tf.shape(x)
             x = flatten_two_dims(x)

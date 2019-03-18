@@ -8,12 +8,13 @@ from utils import small_convnet, flatten_two_dims, unflatten_first_dim, getsess,
 
 
 class Dynamics(object):
-    def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None, scope='dynamics'):
+    def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None, scope='dynamics', reuse=False):
         self.scope = scope
         self.auxiliary_task = auxiliary_task
         self.hidsize = self.auxiliary_task.hidsize
         self.feat_dim = feat_dim
         # self.full_tensorboard_log = full_tensorboard_log
+        self.reuse = reuse
         self.obs = self.auxiliary_task.obs
         self.last_ob = self.auxiliary_task.last_ob
         self.ac = self.auxiliary_task.ac
@@ -21,13 +22,13 @@ class Dynamics(object):
         self.ob_mean = self.auxiliary_task.ob_mean
         self.ob_std = self.auxiliary_task.ob_std
         if predict_from_pixels:
-            self.features = self.get_features(self.obs, reuse=False)
+            self.features = self.get_features(self.obs, reuse=self.reuse)
         else:
             self.features = tf.stop_gradient(self.auxiliary_task.features)
 
         self.out_features = self.auxiliary_task.next_features
 
-        self.pred_features = self.predict_next()
+        self.pred_features = self.predict_next(self.reuse)
         self.pred_error = self.pred_features - tf.stop_gradient(self.out_features)
         with tf.variable_scope(self.scope + "_loss"):
             # self.loss = self.get_loss(self.pred_features)
@@ -46,7 +47,7 @@ class Dynamics(object):
             x = unflatten_first_dim(x, sh)
         return x
 
-    def predict_next(self):
+    def predict_next(self, reuse):
         ac = tf.one_hot(self.ac, self.ac_space.n, axis=2)
         sh = tf.shape(ac)
         ac = flatten_two_dims(ac)
@@ -54,7 +55,7 @@ class Dynamics(object):
         def add_ac(x):
             return tf.concat([x, ac], axis=-1)
 
-        with tf.variable_scope(self.scope):
+        with tf.variable_scope(self.scope, reuse=reuse):
             x = flatten_two_dims(self.features)
             x = tf.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
 

@@ -14,11 +14,12 @@ import tensorflow as tf
 from baselines import logger
 from baselines.bench import Monitor
 from baselines.common.atari_wrappers import NoopResetEnv, FrameStack
+from stable_baselines.common import tf_util
 from mpi4py import MPI
 
 from auxiliary_tasks import FeatureExtractor, InverseDynamics, VAE, JustPixels
-from cnn_policy import CnnPolicy, PredErrorPolicy, ErrorAttentionPolicy
-from cppo_agent import PpoOptimizer
+from rnn_policy import RnnPolicy, ErrorRnnPolicy
+from rppo_agent import RnnPpoOptimizer
 from dynamics import Dynamics, UNet
 from utils import random_agent_ob_mean_std
 from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_robo_hockey, \
@@ -53,11 +54,9 @@ class Trainer(object):
         self.num_timesteps = num_timesteps
         self._set_env_vars()
 
-        self.policy = {"none" : CnnPolicy,
-                       "naiveerr" : PredErrorPolicy,
-                       "erratt" : ErrorAttentionPolicy}[hps['policy_mode']]
-        self.policy = self.policy(
-            scope='pol',
+        self.policy = {"rnn" : RnnPolicy,
+                       "rnnerr" : ErrorRnnPolicy}[hps['policy_mode']]
+        self.action_policy = self.policy(
             ob_space=self.ob_space,
             ac_space=self.ac_space,
             hidsize=512,
@@ -66,28 +65,55 @@ class Trainer(object):
             ob_std=self.ob_std,
             layernormalize=False,
             nl=tf.nn.leaky_relu,
+            n_env=hps['envs_per_process'],
+            n_steps=1,
+            reuse=False,
         )
-
+        with tf.variable_scope("train_model", reuse=True,
+                               custom_getter=tf_util.outer_scope_getter("train_model")):
+            self.train_policy = self.policy(
+                ob_space=self.ob_space,
+                ac_space=self.ac_space,
+                hidsize=512,
+                feat_dim=512,
+                ob_mean=self.ob_mean,
+                ob_std=self.ob_std,
+                layernormalize=False,
+                nl=tf.nn.leaky_relu,
+                n_env=hps['envs_per_process'] // hps['nminibatches'],
+                n_steps=hps['nsteps_per_seg'],
+                reuse=True,
+            )
         self.feature_extractor = {"none": FeatureExtractor,
                                   "idf": InverseDynamics,
                                   "vaesph": partial(VAE, spherical_obs=True),
                                   "vaenonsph": partial(VAE, spherical_obs=False),
                                   "pix2pix": JustPixels}[hps['feat_learning']]
-        self.feature_extractor = self.feature_extractor(policy=self.policy,
-                                                        features_shared_with_policy=hps['feat_sharedWpol'],
-                                                        feat_dim=512,
-                                                        layernormalize=hps['layernorm'])
+        self.action_feature_extractor = self.feature_extractor(policy=self.action_policy,
+                                                               features_shared_with_policy=hps['feat_sharedWpol'],
+                                                               feat_dim=512,
+                                                               layernormalize=hps['layernorm'])
+        self.train_feature_extractor = self.feature_extractor(policy=self.train_policy,
+                                                              features_shared_with_policy=hps['feat_sharedWpol'],
+                                                              feat_dim=512,
+                                                              layernormalize=hps['layernorm'],
+                                                              reuse=True)
 
         self.dynamics = Dynamics if hps['feat_learning'] != 'pix2pix' else UNet
-        self.dynamics = self.dynamics(auxiliary_task=self.feature_extractor,
-                                      predict_from_pixels=hps['dyn_from_pixels'],
-                                      feat_dim=512)
+        self.action_dynamics = self.dynamics(auxiliary_task=self.action_feature_extractor,
+                                             predict_from_pixels=hps['dyn_from_pixels'],
+                                             feat_dim=512)
+        self.train_dynamics = self.dynamics(auxiliary_task=self.train_feature_extractor,
+                                            predict_from_pixels=hps['dyn_from_pixels'],
+                                            feat_dim=512,
+                                            reuse=True)
 
-        self.agent = PpoOptimizer(
+        self.agent = RnnPpoOptimizer(
             scope='ppo',
             ob_space=self.ob_space,
             ac_space=self.ac_space,
-            stochpol=self.policy,
+            actionpol=self.action_policy,
+            trainpol=self.train_policy,
             use_news=hps['use_news'],
             gamma=hps['gamma'],
             lam=hps["lambda"],
@@ -102,18 +128,19 @@ class Trainer(object):
             normadv=hps['norm_adv'],
             ext_coeff=hps['ext_coeff'],
             int_coeff=hps['int_coeff'],
-            dynamics=self.dynamics,
+            action_dynamics=self.action_dynamics,
+            train_dynamics=self.train_dynamics,
             policy_mode=hps['policy_mode'],
             logdir=logdir,
             full_tensorboard_log=hps['full_tensorboard_log'],
             tboard_period=hps['tboard_period']
         )
 
-        self.agent.to_report['aux'] = tf.reduce_mean(self.feature_extractor.loss)
+        self.agent.to_report['aux'] = tf.reduce_mean(self.train_feature_extractor.loss)
         self.agent.total_loss += self.agent.to_report['aux']
-        self.agent.to_report['dyn_loss'] = tf.reduce_mean(self.dynamics.loss)
+        self.agent.to_report['dyn_loss'] = tf.reduce_mean(self.train_dynamics.loss)
         self.agent.total_loss += self.agent.to_report['dyn_loss']
-        self.agent.to_report['feat_var'] = tf.reduce_mean(tf.nn.moments(self.feature_extractor.features, [0, 1])[1])
+        self.agent.to_report['feat_var'] = tf.reduce_mean(tf.nn.moments(self.train_feature_extractor.features, [0, 1])[1])
 
     def _set_env_vars(self):
         env = self.make_env(0, add_monitor=False)
@@ -123,7 +150,7 @@ class Trainer(object):
         self.envs = [functools.partial(self.make_env, i) for i in range(self.envs_per_process)]
 
     def train(self):
-        self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.dynamics)
+        self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.action_dynamics)
         while True:
             info = self.agent.step()
             if info['update']:
@@ -219,8 +246,8 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--policy_mode', type=str, default="naiveerr",
-                        choices=["none", "naiveerr", "erratt"]) # New
+    parser.add_argument('--policy_mode', type=str, default="rnnerr",
+                        choices=["rnn", "rnnerr"]) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New

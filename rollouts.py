@@ -8,9 +8,10 @@ from utils import unflatten_first_dim
 
 
 class Rollout(object):
-    def __init__(self, ob_space, ac_space, nenvs, nsteps_per_seg, nsegs_per_env, nlumps, envs, policy,
-                 int_rew_coeff, ext_rew_coeff, record_rollouts, dynamics, policy_mode):
+    def __init__(self, ob_space, ac_space, nenvs, nminibatches, nsteps_per_seg, nsegs_per_env, nlumps, envs, policy,
+                 int_rew_coeff, ext_rew_coeff, record_rollouts, train_dynamics, policy_mode, action_dynamics=None):
         self.nenvs = nenvs
+        self.nminibatches = nminibatches
         self.nsteps_per_seg = nsteps_per_seg
         self.nsegs_per_env = nsegs_per_env
         self.nsteps = self.nsteps_per_seg * self.nsegs_per_env
@@ -20,7 +21,11 @@ class Rollout(object):
         self.lump_stride = nenvs // self.nlumps
         self.envs = envs
         self.policy = policy
-        self.dynamics = dynamics
+        self.train_dynamics = train_dynamics
+        if action_dynamics is not None:
+            self.action_dynamics = action_dynamics
+        else:
+            self.action_dynamics = self.train_dynamics
         self.policy_mode = policy_mode
 
         self.reward_fun = lambda ext_rew, int_rew: ext_rew_coeff * np.clip(ext_rew, -1., 1.) + int_rew_coeff * int_rew
@@ -43,6 +48,9 @@ class Rollout(object):
         self.buf_errs = np.empty((nenvs, self.nsteps, 512), np.float32) # New
         self.buf_errs_last = self.buf_errs[:, 0, ...].copy() # New
         # self.err_last = self.buf_errs[:, 0, ...].copy()
+        self.buf_states = np.empty((nenvs, self.nsteps, 512), np.float32) # RNN
+        self.buf_states_last = self.buf_states[:, 0, ...].copy()
+        self.buf_states_first = self.buf_states[:, 0, ...].copy()
 
         self.env_results = [None] * self.nlumps
         # self.prev_feat = [None for _ in range(self.nlumps)]
@@ -66,7 +74,13 @@ class Rollout(object):
         self.update_info()
 
     def calculate_reward(self):
-        int_rew = self.dynamics.calculate_loss(ob=self.buf_obs,
+        if self.policy_mode in ['rnn', 'rnnerr']:
+            int_rew = self.train_dynamics.calculate_loss(ob=self.buf_obs,
+                                                   last_ob=self.buf_obs_last,
+                                                   acs=self.buf_acs,
+                                                   nminibatches=self.nminibatches)
+        else:
+            int_rew = self.train_dynamics.calculate_loss(ob=self.buf_obs,
                                                last_ob=self.buf_obs_last,
                                                acs=self.buf_acs)
         self.buf_rews[:] = self.reward_fun(int_rew=int_rew, ext_rew=self.buf_ext_rews)
@@ -98,8 +112,30 @@ class Rollout(object):
                     a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
                     b = np.expand_dims(obs, 1)
                     c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
-                    errs = np.squeeze(self.dynamics.calculate_err(a, b, c))
+                    errs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
                 acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, errs)
+
+            elif self.policy_mode in ['rnn']:
+                if t == 0:
+                    # acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs)
+                    states = self.buf_states_last[sli]
+                    self.buf_states_first[sli] = states
+                elif t < self.nsteps:
+                    states = self.buf_states[sli, t-1]
+                acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, states, news)
+
+            elif self.policy_mode in ['rnnerr']:
+                if t == 0:
+                    states = self.buf_states_last[sli]
+                    self.buf_states_first[sli] = states
+                    errs = self.buf_errs_last[sli]
+                elif t < self.nsteps:
+                    states = self.buf_states[sli, t - 1]
+                    a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
+                    b = np.expand_dims(obs, 1)
+                    c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
+                    errs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+                acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, errs, states, news)
             else :
                 acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs)
             self.env_step(l, acs)
@@ -111,19 +147,13 @@ class Rollout(object):
             self.buf_vpreds[sli, t] = vpreds
             self.buf_nlps[sli, t] = nlps
             self.buf_acs[sli, t] = acs
-            if self.policy_mode in ['naiveerr', 'erratt']:
+            if self.policy_mode in ['naiveerr', 'erratt', 'rnnerr']:
                 self.buf_errs[sli, t] = errs
+            elif self.policy_mode in ['rnn', 'rnnerr']:
+                self.buf_states[sli, t] = states
 
             if t > 0:
                 self.buf_ext_rews[sli, t - 1] = prevrews
-                # self.buf_errs[sli, t - 1] = self.dynamics.calculated_err(obs, acs)
-            # if t > 0:
-            #     dyn_logp = self.policy.call_reward(prev_feat, pol_feat, prev_acs)
-            #
-            #     int_rew = dyn_logp.reshape(-1, )
-            #
-            #     self.int_rew[sli] = int_rew
-            #     self.buf_rews[sli, t - 1] = self.reward_fun(ext_rew=prevrews, int_rew=int_rew)
             if self.recorder is not None:
                 self.recorder.record(timestep=self.step_count, lump=l, acs=acs, infos=infos, int_rew=self.int_rew[sli],
                                      ext_rew=prevrews, news=news)
@@ -140,17 +170,20 @@ class Rollout(object):
                         a = np.expand_dims(obs, 1)
                         b = np.expand_dims(nextobs, 1)
                         c = np.expand_dims(acs, 1)
-                        nexterrs = np.squeeze(self.dynamics.calculate_err(a, b, c))
+                        nexterrs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
                         self.buf_errs_last[sli] = nexterrs
                         nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs)
+                    elif self.policy_mode in ['rnn']:
+                        nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, states, nextnews) # RNN!
+                    elif self.policy_mode in ['rnnerr']:
+                        a = np.expand_dims(obs, 1)
+                        b = np.expand_dims(nextobs, 1)
+                        c = np.expand_dims(acs, 1)
+                        nexterrs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+                        self.buf_errs_last[sli] = nexterrs
+                        nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs, states, nextnews)
                     else :
                         nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs)
-                    # dyn_logp = self.policy.call_reward(self.prev_feat[l], last_pol_feat, prev_acs)
-                    # dyn_logp = dyn_logp.reshape(-1, )
-                    # int_rew = dyn_logp
-                    #
-                    # self.int_rew[sli] = int_rew
-                    # self.buf_rews[sli, t] = self.reward_fun(ext_rew=ext_rews, int_rew=int_rew)
 
     def update_info(self):
         all_ep_infos = MPI.COMM_WORLD.allgather(self.ep_infos_new)
