@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_dim, small_deconvnet
+from utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_dim, small_deconvnet, _save_to_file, _load_from_file, getsess
 
 
 class FeatureExtractor(object):
@@ -33,7 +33,7 @@ class FeatureExtractor(object):
         self.next_ob = tf.concat([self.obs[:, 1:], self.last_ob], 1)
 
         if features_shared_with_policy:
-            with tf.variable_scope('pol'):
+            with tf.variable_scope('policy'):
                 self.features = self.policy.features
                 self.last_features = self.policy.get_features(self.last_ob, reuse=True)
 
@@ -47,9 +47,10 @@ class FeatureExtractor(object):
             # self.ac_next_features = tf.concat([self.ac_features[:, 1:], self.ac_last_features], 1)
 
             self.ac = self.policy.ph_ac
-            self.scope = scope
 
             self.loss = self.get_loss(reuse=self.reuse)
+
+        self.params = tf.trainable_variables(scope=self.scope)
 
     def get_features(self, x, reuse):
         nl = tf.nn.leaky_relu
@@ -66,6 +67,11 @@ class FeatureExtractor(object):
 
     def get_loss(self, reuse=False):
         return tf.zeros((), dtype=tf.float32)
+
+    def save(self, save_path):
+        save_path += self.scope
+        params = getsess().run(self.params)
+        _save_to_file(save_path, params=params)
 
 
 class InverseDynamics(FeatureExtractor):

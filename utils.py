@@ -3,6 +3,7 @@ import os
 import platform
 from functools import partial
 
+import cloudpickle
 import numpy as np
 import tensorflow as tf
 from baselines.common.tf_util import normc_initializer
@@ -292,4 +293,34 @@ def lstm(input_tensor, mask_tensor, cell_state_hidden, scope, n_hidden, init_sca
         input_tensor[idx] = hidden
     cell_state_hidden = tf.concat(axis=1, values=[cell_state, hidden])
     return input_tensor, cell_state_hidden
+
+# @staticmethod
+def _save_to_file(save_path, data=None, params=None):
+    if isinstance(save_path, str):
+        _, ext = os.path.splitext(save_path)
+        if ext == "":
+            save_path += ".pkl"
+
+        with open(save_path, "wb") as file_:
+            cloudpickle.dump((data, params), file_)
+    else:
+        # Here save_path is a file-like object, not a path
+        cloudpickle.dump((data, params), save_path)
+
+# @staticmethod
+def _load_from_file(load_path):
+    if isinstance(load_path, str):
+        if not os.path.exists(load_path):
+            if os.path.exists(load_path + ".pkl"):
+                load_path += ".pkl"
+            else:
+                raise ValueError("Error: the file {} could not be found".format(load_path))
+
+        with open(load_path, "rb") as file:
+            data, params = cloudpickle.load(file)
+    else:
+        # Here load_path is a file-like object, not a path
+        data, params = cloudpickle.load(load_path)
+
+    return data, params
 

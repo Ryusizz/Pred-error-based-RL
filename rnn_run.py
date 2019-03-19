@@ -52,6 +52,7 @@ class Trainer(object):
         self.hps = hps
         self.envs_per_process = envs_per_process
         self.num_timesteps = num_timesteps
+        self.logdir = logdir
         self._set_env_vars()
 
         self.policy = {"rnn" : RnnPolicy,
@@ -107,6 +108,8 @@ class Trainer(object):
                                             predict_from_pixels=hps['dyn_from_pixels'],
                                             feat_dim=512,
                                             reuse=True)
+        if self.hps['load_dynamics']:
+            self.train_dynamics.load(self.logdir)
 
         self.agent = RnnPpoOptimizer(
             scope='ppo',
@@ -159,6 +162,9 @@ class Trainer(object):
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 
+        if self.hps['save_dynamics']:       # save auxilary task and dynamics parameter
+            self.train_dynamics.save(self.logdir)
+            self.train_feature_extractor.save(self.logdir)
         self.agent.stop_interaction()
 
 
@@ -219,7 +225,7 @@ def add_optimization_params(parser):
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--ent_coeff', type=float, default=0.001)
     parser.add_argument('--nepochs', type=int, default=3)
-    parser.add_argument('--num_timesteps', type=int, default=int(2e8))
+    parser.add_argument('--num_timesteps', type=int, default=int(1e6))
 
 
 def add_rollout_params(parser):
@@ -251,7 +257,8 @@ if __name__ == '__main__':
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
-
+    parser.add_argument('--save_dynamics', type=int, default=1)
+    parser.add_argument('--load_dynamics', type=int, default=0)
 
     args = parser.parse_args()
 
