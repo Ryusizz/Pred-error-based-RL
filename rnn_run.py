@@ -27,7 +27,7 @@ from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_
 
 def start_experiment(**args):
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
-    logdir = osp.join("/result/", args['env'], args['exp_name'], datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M"))
+    logdir = osp.join("/result", args['env'], args['exp_name'], datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f"))
     log = logger.scoped_configure(dir=logdir, format_strs=['stdout', 'log', 'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
 
     trainer = Trainer(make_env=make_env,
@@ -108,8 +108,7 @@ class Trainer(object):
                                             predict_from_pixels=hps['dyn_from_pixels'],
                                             feat_dim=512,
                                             reuse=True)
-        if self.hps['load_dynamics']:
-            self.train_dynamics.load(self.logdir)
+
 
         self.agent = RnnPpoOptimizer(
             scope='ppo',
@@ -154,6 +153,13 @@ class Trainer(object):
 
     def train(self):
         self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.action_dynamics)
+        if self.hps['load_dir'] is not None:
+            # self.train_feature_extractor.load(
+            #     "/result/SeaquestNoFrameskip-v4/test/openai-2019-03-19-17-45inverse_dynamics.pkl")
+            # self.train_dynamics.load("/result/SeaquestNoFrameskip-v4/test/openai-2019-03-19-17-45dynamics.pkl")
+            self.train_feature_extractor.load(self.hps['load_dir'])
+            self.train_dynamics.load(self.hps['load_dir'])
+
         while True:
             info = self.agent.step()
             if info['update']:
@@ -162,9 +168,10 @@ class Trainer(object):
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 
-        if self.hps['save_dynamics']:       # save auxilary task and dynamics parameter
-            self.train_dynamics.save(self.logdir)
-            self.train_feature_extractor.save(self.logdir)
+        if self.hps['save_dynamics'] and MPI.COMM_WORLD.Get_rank()== 0:       # save auxilary task and dynamics parameter
+            expdir = osp.join("/result", self.hps['env'], self.hps['exp_name'])
+            self.train_feature_extractor.save(expdir)
+            self.train_dynamics.save(expdir)
         self.agent.stop_interaction()
 
 
@@ -225,7 +232,7 @@ def add_optimization_params(parser):
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--ent_coeff', type=float, default=0.001)
     parser.add_argument('--nepochs', type=int, default=3)
-    parser.add_argument('--num_timesteps', type=int, default=int(1e6))
+    parser.add_argument('--num_timesteps', type=int, default=int(1e5))
 
 
 def add_rollout_params(parser):
@@ -258,7 +265,7 @@ if __name__ == '__main__':
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
     parser.add_argument('--save_dynamics', type=int, default=1)
-    parser.add_argument('--load_dynamics', type=int, default=0)
+    parser.add_argument('--load_dir', type=str, default=None)
 
     args = parser.parse_args()
 

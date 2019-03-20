@@ -100,6 +100,50 @@ class Dynamics(object):
         return getsess().run(self.pred_error,
                              {self.obs: ob, self.last_ob: last_ob, self.ac: acs})
 
+    def save(self, save_path):
+        # data = {
+        #     "gamma": self.gamma,
+        #     "n_steps": self.n_steps,
+        #     "vf_coef": self.vf_coef,
+        #     "ent_coef": self.ent_coef,
+        #     "max_grad_norm": self.max_grad_norm,
+        #     "learning_rate": self.learning_rate,
+        #     "lam": self.lam,
+        #     "nminibatches": self.nminibatches,
+        #     "noptepochs": self.noptepochs,
+        #     "cliprange": self.cliprange,
+        #     "verbose": self.verbose,
+        #     "policy": self.policy,
+        #     "observation_space": self.observation_space,
+        #     "action_space": self.action_space,
+        #     "n_envs": self.n_envs,
+        #     "_vectorize_action": self._vectorize_action,
+        #     "policy_kwargs": self.policy_kwargs
+        # }
+        save_path += "/" + self.scope
+        params = getsess().run(self.params)
+        _save_to_file(save_path, params=params)
+
+    def load(self, load_path, env=None, **kwargs):
+        _, params = _load_from_file(load_path)
+
+        # if 'policy_kwargs' in kwargs and kwargs['policy_kwargs'] != data['policy_kwargs']:
+        #     raise ValueError("The specified policy kwargs do not equal the stored policy kwargs. "
+        #                      "Stored kwargs: {}, specified kwargs: {}".format(data['policy_kwargs'],
+        #                                                                       kwargs['policy_kwargs']))
+
+        # model = cls(policy=data["policy"], env=None, _init_setup_model=False)
+        # self.__dict__.update(data)
+        # self.__dict__.update(kwargs)
+        # .set_env(env)
+        # model.setup_model()
+
+        restores = []
+        for param, loaded_p in zip(self.params, params):
+            restores.append(param.assign(loaded_p))
+        getsess().run(restores)
+        # return model
+
 
 class UNet(Dynamics):
     def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None, scope='pixel_dynamics'):
@@ -136,50 +180,7 @@ class UNet(Dynamics):
         self.prediction_pixels = x * self.ob_std + self.ob_mean
         return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, [2, 3, 4])
 
-    def save(self, save_path):
-        # data = {
-        #     "gamma": self.gamma,
-        #     "n_steps": self.n_steps,
-        #     "vf_coef": self.vf_coef,
-        #     "ent_coef": self.ent_coef,
-        #     "max_grad_norm": self.max_grad_norm,
-        #     "learning_rate": self.learning_rate,
-        #     "lam": self.lam,
-        #     "nminibatches": self.nminibatches,
-        #     "noptepochs": self.noptepochs,
-        #     "cliprange": self.cliprange,
-        #     "verbose": self.verbose,
-        #     "policy": self.policy,
-        #     "observation_space": self.observation_space,
-        #     "action_space": self.action_space,
-        #     "n_envs": self.n_envs,
-        #     "_vectorize_action": self._vectorize_action,
-        #     "policy_kwargs": self.policy_kwargs
-        # }
-        save_path += self.scope
-        params = getsess().run(self.params)
-        _save_to_file(save_path, params=params)
 
-    def load(self, load_path, env=None, **kwargs):
-        data, params = self._load_from_file(load_path)
-
-        if 'policy_kwargs' in kwargs and kwargs['policy_kwargs'] != data['policy_kwargs']:
-            raise ValueError("The specified policy kwargs do not equal the stored policy kwargs. "
-                             "Stored kwargs: {}, specified kwargs: {}".format(data['policy_kwargs'],
-                                                                              kwargs['policy_kwargs']))
-
-        # model = cls(policy=data["policy"], env=None, _init_setup_model=False)
-        self.__dict__.update(data)
-        self.__dict__.update(kwargs)
-        # .set_env(env)
-        # model.setup_model()
-
-        restores = []
-        for param, loaded_p in zip(model.params, params):
-            restores.append(param.assign(loaded_p))
-        model.sess.run(restores)
-
-        return model
 
 
 

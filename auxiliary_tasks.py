@@ -69,9 +69,17 @@ class FeatureExtractor(object):
         return tf.zeros((), dtype=tf.float32)
 
     def save(self, save_path):
-        save_path += self.scope
+        save_path += "/" + self.scope
         params = getsess().run(self.params)
         _save_to_file(save_path, params=params)
+
+    def load(self, load_path, env=None, **kwargs):
+        _, params = _load_from_file(load_path)
+
+        restores = []
+        for param, loaded_p in zip(self.params, params):
+            restores.append(param.assign(loaded_p))
+        getsess().run(restores)
 
 
 class InverseDynamics(FeatureExtractor):
