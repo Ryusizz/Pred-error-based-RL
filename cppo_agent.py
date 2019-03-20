@@ -74,10 +74,14 @@ class PpoOptimizer(object):
                               'approxkl': approxkl, 'clipfrac': clipfrac}
 
             self.logdir = logdir #logger.get_dir()
+            params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            if self.full_tensorboard_log:  # full Tensorboard logging
+                for var in params:
+                    tf.summary.histogram(var.name, var)
             if MPI.COMM_WORLD.Get_rank() == 0:
-                self.summary_writer = tf.summary.FileWriter(self.logdir, graph=getsess()) # New
-                print("tensorboard dir : ", logdir)
-                self.merged_summary_op = tf.summary.merge_all() # New
+                self.summary_writer = tf.summary.FileWriter(self.logdir, graph=getsess())  # New
+                print("tensorboard dir : ", self.logdir)
+                self.merged_summary_op = tf.summary.merge_all()  # New
 
 
     def start_interaction(self, env_fns, dynamics, nlump=2):
@@ -104,7 +108,7 @@ class PpoOptimizer(object):
             VecEnv(env_fns[l * self.lump_stride: (l + 1) * self.lump_stride], spaces=[self.ob_space, self.ac_space]) for
             l in range(self.nlump)]
 
-        self.rollout = Rollout(ob_space=self.ob_space, ac_space=self.ac_space, nenvs=nenvs,
+        self.rollout = Rollout(ob_space=self.ob_space, ac_space=self.ac_space, nenvs=nenvs, nminibatches=self.nminibatches,
                                nsteps_per_seg=self.nsteps_per_seg,
                                nsegs_per_env=self.nsegs_per_env, nlumps=self.nlump,
                                envs=self.envs,
@@ -112,8 +116,8 @@ class PpoOptimizer(object):
                                int_rew_coeff=self.int_coeff,
                                ext_rew_coeff=self.ext_coeff,
                                record_rollouts=self.use_recorder,
-                               dynamics=dynamics,
-                               policy_mode=self.policy_mode)
+                               train_dynamics=dynamics,
+                               policy_mode=self.policy_mode,)
 
         self.buf_advs = np.zeros((nenvs, self.rollout.nsteps), np.float32)
         self.buf_rets = np.zeros((nenvs, self.rollout.nsteps), np.float32)

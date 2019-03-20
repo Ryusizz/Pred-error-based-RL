@@ -139,9 +139,9 @@ class Trainer(object):
         )
 
         self.agent.to_report['aux'] = tf.reduce_mean(self.train_feature_extractor.loss)
-        self.agent.total_loss += self.agent.to_report['aux']
+        self.agent.total_loss += self.agent.to_report['aux'] * self.hps['aux_coeff']
         self.agent.to_report['dyn_loss'] = tf.reduce_mean(self.train_dynamics.loss)
-        self.agent.total_loss += self.agent.to_report['dyn_loss']
+        self.agent.total_loss += self.agent.to_report['dyn_loss'] * self.hps['dyn_coeff']
         self.agent.to_report['feat_var'] = tf.reduce_mean(tf.nn.moments(self.train_feature_extractor.features, [0, 1])[1])
 
     def _set_env_vars(self):
@@ -231,6 +231,8 @@ def add_optimization_params(parser):
     parser.add_argument('--norm_rew', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--ent_coeff', type=float, default=0.001)
+    parser.add_argument('--dyn_coeff', type=float, default=1)
+    parser.add_argument('--aux_coeff', type=float, default=1)
     parser.add_argument('--nepochs', type=int, default=3)
     parser.add_argument('--num_timesteps', type=int, default=int(1e5))
 

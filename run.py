@@ -26,7 +26,7 @@ from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_
 
 def start_experiment(**args):
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
-    logdir = osp.join("/result", args['env'], args['exp_name'], datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
+    logdir = osp.join("/result", args['env'], args['exp_name'], datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f"))
     log = logger.scoped_configure(dir=logdir, format_strs=['stdout', 'log', 'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
 
     trainer = Trainer(make_env=make_env,
@@ -110,9 +110,9 @@ class Trainer(object):
         )
 
         self.agent.to_report['aux'] = tf.reduce_mean(self.feature_extractor.loss)
-        self.agent.total_loss += self.agent.to_report['aux']
+        self.agent.total_loss += self.agent.to_report['aux'] * self.hps['aux_coeff']
         self.agent.to_report['dyn_loss'] = tf.reduce_mean(self.dynamics.loss)
-        self.agent.total_loss += self.agent.to_report['dyn_loss']
+        self.agent.total_loss += self.agent.to_report['dyn_loss'] * self.hps['dyn_coeff']
         self.agent.to_report['feat_var'] = tf.reduce_mean(tf.nn.moments(self.feature_extractor.features, [0, 1])[1])
 
     def _set_env_vars(self):
@@ -124,6 +124,9 @@ class Trainer(object):
 
     def train(self):
         self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.dynamics)
+        if self.hps['load_dir'] is not None:
+            self.feature_extractor.load(self.hps['load_dir'])
+            self.dynamics.load(self.hps['load_dir'])
         while True:
             info = self.agent.step()
             if info['update']:
@@ -132,6 +135,10 @@ class Trainer(object):
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 
+        if self.hps['save_dynamics'] and MPI.COMM_WORLD.Get_rank()== 0:       # save auxilary task and dynamics parameter
+            expdir = osp.join("/result", self.hps['env'], self.hps['exp_name'])
+            self.feature_extractor.save(expdir)
+            self.dynamics.save(expdir)
         self.agent.stop_interaction()
 
 
@@ -175,6 +182,7 @@ def get_experiment_environment(**args):
     return tf_context
 
 
+
 def add_environments_params(parser):
     parser.add_argument('--env', help='environment ID', default='SeaquestNoFrameskip-v4',
                         type=str)
@@ -191,14 +199,16 @@ def add_optimization_params(parser):
     parser.add_argument('--norm_rew', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--ent_coeff', type=float, default=0.001)
+    parser.add_argument('--dyn_coeff', type=float, default=1)
+    parser.add_argument('--aux_coeff', type=float, default=1)
     parser.add_argument('--nepochs', type=int, default=3)
-    parser.add_argument('--num_timesteps', type=int, default=int(2e8))
+    parser.add_argument('--num_timesteps', type=int, default=int(1e5))
 
 
 def add_rollout_params(parser):
     parser.add_argument('--nsteps_per_seg', type=int, default=128)
     parser.add_argument('--nsegs_per_env', type=int, default=1)
-    parser.add_argument('--envs_per_process', type=int, default=128)
+    parser.add_argument('--envs_per_process', type=int, default=16)
     parser.add_argument('--nlumps', type=int, default=1)
 
 
@@ -223,7 +233,9 @@ if __name__ == '__main__':
                         choices=["none", "naiveerr", "erratt"]) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=2) # New
-    parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
+    parser.add_argument('--feat_sharedWpol', type=int, default=0)  # New
+    parser.add_argument('--save_dynamics', type=int, default=0)
+    parser.add_argument('--load_dir', type=str, default="/result/SeaquestNoFrameskip-v4/test")
 
 
     args = parser.parse_args()

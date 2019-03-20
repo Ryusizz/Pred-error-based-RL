@@ -125,6 +125,7 @@ class Dynamics(object):
         _save_to_file(save_path, params=params)
 
     def load(self, load_path, env=None, **kwargs):
+        load_path += "/" + self.scope
         _, params = _load_from_file(load_path)
 
         # if 'policy_kwargs' in kwargs and kwargs['policy_kwargs'] != data['policy_kwargs']:
