@@ -1,9 +1,10 @@
 import tensorflow as tf
 
-from utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_dim, small_deconvnet, _save_to_file, _load_from_file, getsess
+from utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_dim, small_deconvnet, _save_to_file, \
+    _load_from_file, getsess, SaveLoad
 
 
-class FeatureExtractor(object):
+class FeatureExtractor(SaveLoad):
     def __init__(self, policy, features_shared_with_policy, n_env=None, feat_dim=None, layernormalize=None,
                  scope='feature_extractor', reuse=False):
         self.scope = scope
@@ -68,19 +69,19 @@ class FeatureExtractor(object):
     def get_loss(self, reuse=False):
         return tf.zeros((), dtype=tf.float32)
 
-    def save(self, save_path):
-        save_path += "/" + self.scope
-        params = getsess().run(self.params)
-        _save_to_file(save_path, params=params)
-
-    def load(self, load_path, env=None, **kwargs):
-        load_path += "/" + self.scope
-        _, params = _load_from_file(load_path)
-
-        restores = []
-        for param, loaded_p in zip(self.params, params):
-            restores.append(param.assign(loaded_p))
-        getsess().run(restores)
+    # def save(self, save_path):
+    #     save_path += "/" + self.scope
+    #     params = getsess().run(self.params)
+    #     _save_to_file(save_path, params=params)
+    #
+    # def load(self, load_path, env=None, **kwargs):
+    #     load_path += "/" + self.scope
+    #     _, params = _load_from_file(load_path)
+    #
+    #     restores = []
+    #     for param, loaded_p in zip(self.params, params):
+    #         restores.append(param.assign(loaded_p))
+    #     getsess().run(restores)
 
 
 class InverseDynamics(FeatureExtractor):

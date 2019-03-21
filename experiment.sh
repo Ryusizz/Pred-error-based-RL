@@ -1,8 +1,8 @@
 #!/bin/bash
-declare -a args=("exp_name" "RConErr_idf_fromDyn_100M_dynloss00"
-                 "env" "SeaquestNoFrameskip-v4"
+declare -a args=("exp_name" "RPPO_idf_forDyn_200M"
+                 "env" "RobotankNoFrameskip-v4"
                  "env_kind" "atari"
-                 "policy_mode" "rnnerr"
+                 "policy_mode" "rnn"
                  "feat_learning" "idf"
                  "dyn_from_pixels" 0
                  "feat_sharedWpol" 0
@@ -10,11 +10,12 @@ declare -a args=("exp_name" "RConErr_idf_fromDyn_100M_dynloss00"
                  "tboard_period" 10
                  "ext_coeff" 1.
                  "int_coeff" 0.
-                 "save_dynamics" 0
-                 "load_dir" "/result/SeaquestNoFrameskip-v4/RConErr_idf_forDyn_100M"
+                 "save_dynamics" 1
+                 #"load_dir" "/result/SeaquestNoFrameskip-v4/RConErr_idf_forDyn_100M"
                  "num_timesteps" 200000000
-                 "dyn_coeff" 0.
-                 "aux_coeff" 0.
+                 "dyn_coeff" 1.
+                 "aux_coeff" 1.
+                 "save_interval" 20000000
                  )
 
 arraylength=${#args[@]}

@@ -152,6 +152,10 @@ class Trainer(object):
 
     def train(self):
         self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.action_dynamics)
+        expdir = osp.join("/result", self.hps['env'], self.hps['exp_name'])
+        save_checkpoints = []
+        if self.hps['save_interval'] is not None:
+            save_checkpoints = [i*self.hps['save_interval'] for i in range(1, self.hps['num_timesteps']//self.hps['save_interval'])]
         if self.hps['load_dir'] is not None:
             self.train_feature_extractor.load(self.hps['load_dir'])
             self.train_dynamics.load(self.hps['load_dir'])
@@ -161,11 +165,14 @@ class Trainer(object):
             if info['update']:
                 logger.logkvs(info['update'])
                 logger.dumpkvs()
+            if len(save_checkpoints) > 0:
+                if self.agent.rollout.stats['tcount'] > save_checkpoints[0]:
+                    self.train_feature_extractor.save(expdir, self.agent.rollout.stats['tcount'])
+                    self.train_dynamics.save(expdir, self.agent.rollout.stats['tcount'])
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 
         if self.hps['save_dynamics'] and MPI.COMM_WORLD.Get_rank()== 0:       # save auxilary task and dynamics parameter
-            expdir = osp.join("/result", self.hps['env'], self.hps['exp_name'])
             self.train_feature_extractor.save(expdir)
             self.train_dynamics.save(expdir)
         self.agent.stop_interaction()
@@ -263,6 +270,7 @@ if __name__ == '__main__':
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
     parser.add_argument('--save_dynamics', type=int, default=0)
+    parser.add_argument('--save_interval', type=int, default=None)
     parser.add_argument('--load_dir', type=str, default=None)
 
     args = parser.parse_args()
