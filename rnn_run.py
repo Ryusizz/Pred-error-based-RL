@@ -36,7 +36,6 @@ def start_experiment(**args):
                       logdir=logdir)
     tf_sess = get_experiment_environment(**args)
     with log, tf_sess:
-        # logdir = logger.get_dir()
         print("results will be saved to ", logdir)
         with open("{}/args.txt".format(logdir), 'w') as argfile:
             print("saving argments...")
@@ -154,9 +153,6 @@ class Trainer(object):
     def train(self):
         self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.action_dynamics)
         if self.hps['load_dir'] is not None:
-            # self.train_feature_extractor.load(
-            #     "/result/SeaquestNoFrameskip-v4/test/openai-2019-03-19-17-45inverse_dynamics.pkl")
-            # self.train_dynamics.load("/result/SeaquestNoFrameskip-v4/test/openai-2019-03-19-17-45dynamics.pkl")
             self.train_feature_extractor.load(self.hps['load_dir'])
             self.train_dynamics.load(self.hps['load_dir'])
 
@@ -266,7 +262,7 @@ if __name__ == '__main__':
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
-    parser.add_argument('--save_dynamics', type=int, default=1)
+    parser.add_argument('--save_dynamics', type=int, default=0)
     parser.add_argument('--load_dir', type=str, default=None)
 
     args = parser.parse_args()

@@ -35,7 +35,6 @@ def start_experiment(**args):
                       logdir=logdir)
     tf_sess = get_experiment_environment(**args)
     with log, tf_sess:
-        # logdir = logger.get_dir()
         print("results will be saved to ", logdir)
         with open("{}/args.txt".format(logdir), 'w') as argfile:
             print("saving argments...")
@@ -208,7 +207,7 @@ def add_optimization_params(parser):
 def add_rollout_params(parser):
     parser.add_argument('--nsteps_per_seg', type=int, default=128)
     parser.add_argument('--nsegs_per_env', type=int, default=1)
-    parser.add_argument('--envs_per_process', type=int, default=16)
+    parser.add_argument('--envs_per_process', type=int, default=128)
     parser.add_argument('--nlumps', type=int, default=1)
 
 
@@ -235,7 +234,7 @@ if __name__ == '__main__':
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0)  # New
     parser.add_argument('--save_dynamics', type=int, default=0)
-    parser.add_argument('--load_dir', type=str, default="/result/SeaquestNoFrameskip-v4/test")
+    parser.add_argument('--load_dir', type=str, default=None)
 
 
     args = parser.parse_args()
