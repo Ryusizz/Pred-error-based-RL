@@ -123,6 +123,11 @@ class Trainer(object):
 
     def train(self):
         self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.dynamics)
+        expdir = osp.join("/result", self.hps['env'], self.hps['exp_name'])
+        save_checkpoints = []
+        if self.hps['save_interval'] is not None:
+            save_checkpoints = [i * self.hps['save_interval'] for i in
+                                range(1, self.hps['num_timesteps'] // self.hps['save_interval'])]
         if self.hps['load_dir'] is not None:
             self.feature_extractor.load(self.hps['load_dir'])
             self.dynamics.load(self.hps['load_dir'])
@@ -131,6 +136,10 @@ class Trainer(object):
             if info['update']:
                 logger.logkvs(info['update'])
                 logger.dumpkvs()
+            if len(save_checkpoints) > 0:
+                if self.agent.rollout.stats['tcount'] > save_checkpoints[0]:
+                    self.feature_extractor.save(expdir, self.agent.rollout.stats['tcount'])
+                    self.dynamics.save(expdir, self.agent.rollout.stats['tcount'])
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 
