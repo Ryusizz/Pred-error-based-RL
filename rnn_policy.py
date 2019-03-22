@@ -132,15 +132,26 @@ class ErrorRnnPolicy(RnnPolicy):
             self.flat_pred_error = flatten_two_dims(self.pred_error)
 
             with tf.variable_scope(scope, reuse=self.reuse):
-                x = tf.concat([self.flat_features, self.flat_pred_error], axis=1)
+                ## Concat
+                # x = tf.concat([self.flat_features, self.flat_pred_error], axis=1)
+
+                ## Add
                 # q = fc(self.flat_pred_error, units=hidsize, activation=activ, use_bias=False, name="error_embed")
                 # k = fc(self.flat_features, units=hidsize, activation=activ, use_bias=False, name="feature_embed")
                 # x = q + k
+
+                ## ObStErrRe
+                x = self.flat_pred_error
+
                 input_sequence = batch_to_seq(x, self.n_env, self.n_steps)
                 masks = batch_to_seq(self.masks_ph, self.n_env, self.n_steps)
                 rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
                                              layer_norm=False)
                 rnn_output = seq_to_batch(rnn_output)
+
+                ## Concat
+                rnn_output = tf.concat([self.flat_features, rnn_output])
+
                 pdparam = fc(rnn_output, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
             pdparam = unflatten_first_dim(pdparam, sh)

@@ -243,6 +243,7 @@ if __name__ == '__main__':
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0)  # New
     parser.add_argument('--save_dynamics', type=int, default=0)
+    parser.add_argument('--save_interval', type=int, default=None)
     parser.add_argument('--load_dir', type=str, default=None)
 
 
