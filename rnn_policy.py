@@ -150,7 +150,11 @@ class ErrorRnnPolicy(RnnPolicy):
                 rnn_output = seq_to_batch(rnn_output)
 
                 ## Concat
-                rnn_output = tf.concat([self.flat_features, rnn_output])
+                q = self.flat_features
+                q = tf.concat([q, rnn_output], axis=1)
+                q = fc(q, units=hidsize, activation=activ, name="fc1")
+                q = fc(q, units=hidsize, activation=activ, name="fc2")
+                rnn_output = q
 
                 pdparam = fc(rnn_output, name='pd', units=pdparamsize, activation=None)
                 vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
