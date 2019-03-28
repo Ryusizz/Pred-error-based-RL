@@ -140,6 +140,7 @@ class Trainer(object):
                 if self.agent.rollout.stats['tcount'] > save_checkpoints[0]:
                     self.feature_extractor.save(expdir, self.agent.rollout.stats['tcount'])
                     self.dynamics.save(expdir, self.agent.rollout.stats['tcount'])
+                    save_checkpoints.remove(save_checkpoints[0])
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 

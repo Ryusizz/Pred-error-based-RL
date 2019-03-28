@@ -207,6 +207,10 @@ class RnnPpoOptimizer(object):
         ])
         if self.policy_mode in ['rnnerr']:
             ph_buf.extend([(self.trainpol.pred_error, resh(self.rollout.buf_errs))])  # New
+        elif self.policy_mode in ['rnnerrac']:
+            ph_buf.extend([(self.trainpol.pred_error, resh(self.rollout.buf_errs)),
+                           (self.trainpol.ph_ac, resh(self.rollout.buf_acs)),
+                           (self.trainpol.ph_ac_first, resh(self.rollout.buf_acs_first))])
 
         mblossvals = []
 
@@ -240,8 +244,9 @@ class RnnPpoOptimizer(object):
             info["error"] = np.sqrt(np.power(self.rollout.buf_errs, 2).mean())
 
         if self.n_updates % self.tboard_period == 0 and MPI.COMM_WORLD.Get_rank() == 0:
-            summary = getsess().run(self.merged_summary_op, fd)  # New
-            self.summary_writer.add_summary(summary, self.rollout.stats["tcount"])  # New
+            if self.full_tensorboard_log:
+                summary = getsess().run(self.merged_summary_op, fd)  # New
+                self.summary_writer.add_summary(summary, self.rollout.stats["tcount"])  # New
             for k, v in info.items():
                 summary = tf.Summary(value=[tf.Summary.Value(tag=k, simple_value=v),])
                 self.summary_writer.add_summary(summary, self.rollout.stats["tcount"])

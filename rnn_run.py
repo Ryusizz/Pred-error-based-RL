@@ -18,7 +18,7 @@ from stable_baselines.common import tf_util
 from mpi4py import MPI
 
 from auxiliary_tasks import FeatureExtractor, InverseDynamics, VAE, JustPixels
-from rnn_policy import RnnPolicy, ErrorRnnPolicy
+from rnn_policy import RnnPolicy, ErrorRnnPolicy, ErrorActRnnPolicy
 from rppo_agent import RnnPpoOptimizer
 from dynamics import Dynamics, UNet
 from utils import random_agent_ob_mean_std
@@ -55,7 +55,8 @@ class Trainer(object):
         self._set_env_vars()
 
         self.policy = {"rnn" : RnnPolicy,
-                       "rnnerr" : ErrorRnnPolicy}[hps['policy_mode']]
+                       "rnnerr" : ErrorRnnPolicy,
+                       "rnnerrac" : ErrorActRnnPolicy}[hps['policy_mode']]
         self.action_policy = self.policy(
             ob_space=self.ob_space,
             ac_space=self.ac_space,
@@ -169,6 +170,7 @@ class Trainer(object):
                 if self.agent.rollout.stats['tcount'] > save_checkpoints[0]:
                     self.train_feature_extractor.save(expdir, self.agent.rollout.stats['tcount'])
                     self.train_dynamics.save(expdir, self.agent.rollout.stats['tcount'])
+                    save_checkpoints.remove(save_checkpoints[0])
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 
@@ -264,8 +266,8 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--policy_mode', type=str, default="rnnerr",
-                        choices=["rnn", "rnnerr"]) # New
+    parser.add_argument('--policy_mode', type=str, default="rnnerrac",
+                        choices=["rnn", "rnnerr", "rnnerrac"]) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
