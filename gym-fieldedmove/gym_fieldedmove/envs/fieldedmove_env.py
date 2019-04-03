@@ -1,108 +1,108 @@
+from random import random
+
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 import numpy as np
 
 class FieldedMove(gym.Env):
-	metadata = {'render.modes': ['human']}
-
+	metadata = {'render.modes': ['console', 'human'],
+				'video.frames_per_second' : 60}
+	red = (255, 0, 0)
+	blue = (0, 0, 255)
 
 	def __init__(self):
-		# self.state = []
-		# for i in range(3):
-		# 	self.state += [[]]
-		# 	for j in range(3):
-		# 		self.state[i] += ["-"]
-		# self.counter = 0
-		# self.done = 0
-		# self.add = [0, 0]
-		# self.reward = 0
-		self.observation_space = gym.spaces.Box(low=0, high=255, shape=(84, 84, 1), dtype=np.uint8)
-		self.action = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
-		self.position = [0., 0.]
-		self.velocity = [0., 0.]
-		self.acceleration = [0., 0.]
-		self.counter = 0
+		self.window_height = 84
+		self.window_width = 84
+		self.env_height = 84
+		self.env_width = 84
+		self.object_size = 3
+		self.rad = 30
+
+		self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self.env_height, self.env_width, 3), dtype=np.uint8)
+		self.action_space = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
+		self.position = np.zeros(2)
+		self.velocity = np.zeros(2)
+		self.acceleration = np.zeros(2)
+		self.count = 0
+		self.count_max = 100
 		self.done = 0
 		self.reward = 0
 
-		self.goal = [1., 1.] # temp
-		self.magnitude = [15, 15]
-		self.field = [1., 1.]
+		# self.goal = np.ones(2) # temp
+		self.goal_degree = 2*np.pi
+		self.goal = [self.rad * np.sin(self.goal_degree), self.rad * np.cos(self.goal_degree)]
+		self.magnitude = 15 #np.array([15, 15])
+		self.field = np.array([1., 1.])
+		self.period = 1 # temp
 
 
-	# def check(self):
-	#
-	# 	if(self.counter<5):
-	# 		return 0
-	# 	for i in range(3):
-	# 		if(self.state[i][0] != "-" and self.state[i][1] == self.state[i][0] and self.state[i][1] == self.state[i][2]):
-	# 			if(self.state[i][0] == "o"):
-	# 				return 1
-	# 			else:
-	# 				return 2
-	# 		if(self.state[0][i] != "-" and self.state[1][i] == self.state[0][i] and self.state[1][i] == self.state[2][i]):
-	# 			if(self.state[0][i] == "o"):
-	# 				return 1
-	# 			else:
-	# 				return 2
-	# 	if(self.state[0][0] != "-" and self.state[1][1] == self.state[0][0] and self.state[1][1] == self.state[2][2]):
-	# 		if(self.state[0][0] == "o"):
-	# 			return 1
-	# 		else:
-	# 			return 2
-	# 	if(self.state[0][2] != "-" and self.state[0][2] == self.state[1][1] and self.state[1][1] == self.state[2][0]):
-	# 		if(self.state[1][1] == "o"):
-	# 			return 1
-	# 		else:
-	# 			return 2
-
-	def getstate(self):
-		return self.position
+	def _update_state(self):
+		self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
+		posX, posY = np.round(self.position).astype(int)
+		self.state[posX:posX+self.object_size, posY:posY+self.object_size] = self.red
+		posX_g, posY_g = np.round(self.goal).astype(int)
+		self.state[posX_g:posX_g+self.object_size, posY_g:posY_g+self.object_size] = self.blue
+		return self.state
 
 	def calculate_fieldforce(self, velocity):
-		xd, yd = velocity
-		phi = arctan(yd/xd)
-		F = [-sin(self.period * phi), cos(self.period * phi)]
-		F = -15 * sqrt(xd^2 + yd^2)
+		x, y = velocity
+		phi = np.arctan(y/(x+0.000001))
+		F = np.array([np.sin(self.period * phi), -np.cos(self.period * phi)])
+		mag_curr = self.magnitude * np.sqrt(x**2 + y**2)
+		F = np.multiply(F, mag_curr)
 		return F
 
 
 	def step(self, target):
 		if self.done == 1:
 			print("Game Over")
-			return [self.getstate(), self.reward, self.done, None]
+			return [self._update_state(), self.reward, self.done, None]
 		else:
+			self.count += 1
 			self.acceleration += target
 			self.acceleration += self.calculate_fieldforce(self.velocity)
 			self.velocity += self.acceleration # temp
+			self.position += self.velocity
+			dist_goal = np.sqrt(((self.position - self.goal) ** 2).sum())
+
+			self.reward = 1 - dist_goal/self.rad # temp
+
+			if dist_goal < 0.1:
+				self.done = 1
 
 			self.render()
 
-		win = self.check()
-		if(win):
-			self.done = 1;
-			print("Player ", win, " wins.", sep = "", end = "\n")
-			self.add[win-1] = 1;
-			if win == 1:
-				self.reward = 100
-			else:
-				self.reward = -100
 
-		return [self.state, self.reward, self.done, self.add]
+		return [self._update_state(), self.reward, self.done, None]
 
 	def reset(self):
-		for i in range(3):
-			for j in range(3):
-				self.state[i][j] = "-"
-		self.counter = 0
+		self.count = 0
 		self.done = 0
-		self.add = [0, 0]
+		self.position = np.zeros(2)
+		self.velocity = np.zeros(2)
+		self.acceleration = np.zeros(2)
+		self.goal_degree = random.randint(36) * (2*np.pi/36)
+		self.goal = [self.rad*np.sin(self.goal_degree), self.rad*np.cos(self.goal_degree)]
 		self.reward = 0
 		return self.state
 
-	def render(self):
-		for i in range(3):
-			for j in range(3):
-				print(self.state[i][j], end = " ")
-			print("")
+	def render(self, mode='console', close=False):
+		if mode == 'console':
+			print(self._update_state)
+
+		elif mode == "human":
+			try:
+				import pygame
+				from pygame import gfxdraw
+			except ImportError as e:
+				raise error.DependencyNotInstalled(
+					"{}. (HINT: install pygame using `pip install pygame`".format(e))
+			if close:
+				pygame.quit()
+
+if __name__ == "__main__":
+	env = FieldedMove()
+	for i in range(30):
+		action = np.random.normal(0, 1, 2)
+		state, reward, done, info = env.step(action)

@@ -205,12 +205,13 @@ class RnnPpoOptimizer(object):
             (self.trainpol.states_ph, resh(self.rollout.buf_states_first)),     # rnn inputs
             (self.trainpol.masks_ph, resh(self.rollout.buf_news))
         ])
-        if self.policy_mode in ['rnnerr']:
+        if 'err' in self.policy_mode:
             ph_buf.extend([(self.trainpol.pred_error, resh(self.rollout.buf_errs))])  # New
-        elif self.policy_mode in ['rnnerrac']:
-            ph_buf.extend([(self.trainpol.pred_error, resh(self.rollout.buf_errs)),
-                           (self.trainpol.ph_ac, resh(self.rollout.buf_acs)),
+        if 'ac' in self.policy_mode:
+            ph_buf.extend([(self.trainpol.ph_ac, resh(self.rollout.buf_acs)),
                            (self.trainpol.ph_ac_first, resh(self.rollout.buf_acs_first))])
+        if 'pred' in self.policy_mode:
+            ph_buf.extend([(self.trainpol.obs_pred, resh(self.rollout.buf_obpreds))])
 
         mblossvals = []
 
@@ -240,7 +241,7 @@ class RnnPpoOptimizer(object):
         self.t_last_update = tnow
 
         # New
-        if self.policy_mode in ['rnnerr'] :
+        if 'err' in self.policy_mode:
             info["error"] = np.sqrt(np.power(self.rollout.buf_errs, 2).mean())
 
         if self.n_updates % self.tboard_period == 0 and MPI.COMM_WORLD.Get_rank() == 0:

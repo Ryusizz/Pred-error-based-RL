@@ -46,10 +46,11 @@ class Rollout(object):
         # self.buf_fpred = np.empty((nenvs, self.nsteps, *self.dynamics.pred_error.shape), self.dynamics.dtype) # New
         # print(dynamics.pred_error.shape)
         # print(dynamics.pred_error.dtype)
-        self.buf_errs = np.empty((nenvs, self.nsteps, 512), np.float32) # New
+        self.buf_errs = np.zeros((nenvs, self.nsteps, 512), np.float32) # New
         self.buf_errs_last = self.buf_errs[:, 0, ...].copy() # New
-        # self.err_last = self.buf_errs[:, 0, ...].copy()
-        self.buf_states = np.empty((nenvs, self.nsteps, 512), np.float32) # RNN
+        self.buf_obpreds = np.zeros((nenvs, self.nsteps, 512), np.float32)
+        self.buf_obpreds_last = self.buf_obpreds[:, 0, ...].copy()
+        self.buf_states = np.zeros((nenvs, self.nsteps, 512), np.float32) # RNN
         self.buf_states_last = self.buf_states[:, 0, ...].copy()
         self.buf_states_first = self.buf_states[:, 0, ...].copy()
 
@@ -75,7 +76,7 @@ class Rollout(object):
         self.update_info()
 
     def calculate_reward(self):
-        if self.policy_mode in ['rnn', 'rnnerr', 'rnnerrac']:
+        if 'rnn' in self.policy_mode:
             int_rew = self.train_dynamics.calculate_loss(ob=self.buf_obs,
                                                    last_ob=self.buf_obs_last,
                                                    acs=self.buf_acs,
@@ -106,54 +107,90 @@ class Rollout(object):
 
             sli = slice(l * self.lump_stride, (l + 1) * self.lump_stride)
 
+            policy_input = [obs]
 
-            if self.policy_mode in ['naiveerr', 'erratt'] :
-                if t == 0 :
+            if 'err' in self.policy_mode:
+                if t == 0:
+                    obpreds = self.buf_obpreds_last[sli]
                     errs = self.buf_errs_last[sli]
-                elif t < self.nsteps :
+                elif t < self.nsteps:
                     a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
                     b = np.expand_dims(obs, 1)
                     c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
-                    errs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
-                acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, errs)
-
-            elif self.policy_mode in ['rnn']:
+                    errs, obpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+                policy_input.append(errs)
+                policy_input.append(news)
+                if 'pred' in self.policy_mode:
+                    policy_input.append(obpreds)
+            if 'ac' in self.policy_mode:
                 if t == 0:
-                    # acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs)
+                    self.buf_acs_first = np.expand_dims(self.buf_acs[sli, -1], 1)
+                acs_before = self.buf_acs[sli, t-1]
+                policy_input.append(acs_before)
+            if 'rnn' in self.policy_mode:
+                if t == 0:
                     states = self.buf_states_last[sli]
                     self.buf_states_first[sli] = states
                 elif t < self.nsteps:
                     states = self.buf_states[sli, t-1]
-                acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, states, news)
+                policy_input.append(states)
 
-            elif self.policy_mode in ['rnnerr']:
-                if t == 0:
-                    states = self.buf_states_last[sli]
-                    self.buf_states_first[sli] = states
-                    errs = self.buf_errs_last[sli]
-                elif t < self.nsteps:
-                    states = self.buf_states[sli, t - 1]
-                    a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
-                    b = np.expand_dims(obs, 1)
-                    c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
-                    errs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
-                acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, errs, states, news)
-            elif self.policy_mode in ['rnnerrac']:
-                if t == 0:
-                    self.buf_acs_first = np.expand_dims(self.buf_acs[sli, -1], 1)
-                    states = self.buf_states_last[sli]
-                    self.buf_states_first[sli] = states
-                    errs = self.buf_errs_last[sli]
-                elif t < self.nsteps:
-                    states = self.buf_states[sli, t - 1]
-                    a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
-                    b = np.expand_dims(obs, 1)
-                    c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
-                    errs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
-                acs_before = self.buf_acs[sli, t-1]
-                acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, errs, acs_before, states, news)
-            else :
-                acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs)
+            policy_output = self.policy.get_ac_value_nlp(*policy_input)
+            if len(policy_output) == 3:
+                acs, vpreds, nlps = policy_output
+            elif len(policy_output) == 4:
+                acs, vpreds, states, nlps = policy_output
+            # print("state means :", states.mean(), " err means :", errs.mean())
+
+            # if self.policy_mode in ['naiveerr', 'erratt'] :
+            #     if t == 0 :
+            #         errs = self.buf_errs_last[sli]
+            #         obpreds = self.buf_obpreds_last[sli]
+            #     elif t < self.nsteps :
+            #         a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
+            #         b = np.expand_dims(obs, 1)
+            #         c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
+            #         errs, obpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+            #     acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs, errs, obpreds)
+            #
+            # elif self.policy_mode in ['rnn']:
+            #     if t == 0:
+            #         # acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs)
+            #         states = self.buf_states_last[sli]
+            #         self.buf_states_first[sli] = states
+            #     elif t < self.nsteps:
+            #         states = self.buf_states[sli, t-1]
+            #     acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, states, news)
+            #
+            # elif self.policy_mode in ['rnnerr']:
+            #     if t == 0:
+            #         states = self.buf_states_last[sli]
+            #         self.buf_states_first[sli] = states
+            #         errs = self.buf_errs_last[sli]
+            #     elif t < self.nsteps:
+            #         states = self.buf_states[sli, t - 1]
+            #         a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
+            #         b = np.expand_dims(obs, 1)
+            #         c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
+            #         errs, obpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+            #     acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, errs, states, news)
+            # elif self.policy_mode in ['rnnerrac']:
+            #     if t == 0:
+            #         self.buf_acs_first = np.expand_dims(self.buf_acs[sli, -1], 1)
+            #         states = self.buf_states_last[sli]
+            #         self.buf_states_first[sli] = states
+            #         errs = self.buf_errs_last[sli]
+            #     elif t < self.nsteps:
+            #         states = self.buf_states[sli, t - 1]
+            #         a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
+            #         b = np.expand_dims(obs, 1)
+            #         c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
+            #         errs, obpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+            #     acs_before = self.buf_acs[sli, t-1]
+            #     acs, vpreds, states, nlps = self.policy.get_ac_value_nlp(obs, errs, states, acs_before, news)
+            # else :
+            #     acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs)
+
             self.env_step(l, acs)
 
             # self.prev_feat[l] = dyn_feat
@@ -163,9 +200,10 @@ class Rollout(object):
             self.buf_vpreds[sli, t] = vpreds
             self.buf_nlps[sli, t] = nlps
             self.buf_acs[sli, t] = acs
-            if self.policy_mode in ['naiveerr', 'erratt', 'rnnerr', 'rnnerrac']:
+            if 'err' in self.policy_mode:
                 self.buf_errs[sli, t] = errs
-            elif self.policy_mode in ['rnn', 'rnnerr', 'rnnerrac']:
+                self.buf_obpreds[sli, t] = obpreds
+            if 'rnn' in self.policy_mode:
                 self.buf_states[sli, t] = states
 
             if t > 0:
@@ -182,31 +220,31 @@ class Rollout(object):
                 if t == self.nsteps - 1:
                     self.buf_new_last[sli] = nextnews
                     self.buf_ext_rews[sli, t] = ext_rews
-                    if self.policy_mode in ['naiveerr', 'erratt'] :
+                    policy_input = [nextobs]
+                    if 'err' in self.policy_mode:
                         a = np.expand_dims(obs, 1)
                         b = np.expand_dims(nextobs, 1)
                         c = np.expand_dims(acs, 1)
-                        nexterrs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+                        nexterrs, nextobpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
                         self.buf_errs_last[sli] = nexterrs
-                        nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs)
-                    elif self.policy_mode in ['rnn']:
-                        nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, states, nextnews) # RNN!
-                    elif self.policy_mode in ['rnnerr']:
-                        a = np.expand_dims(obs, 1)
-                        b = np.expand_dims(nextobs, 1)
-                        c = np.expand_dims(acs, 1)
-                        nexterrs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
-                        self.buf_errs_last[sli] = nexterrs
-                        nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs, states, nextnews)
-                    elif self.policy_mode in ['rnnerrac']:
-                        a = np.expand_dims(obs, 1)
-                        b = np.expand_dims(nextobs, 1)
-                        c = np.expand_dims(acs, 1)
-                        nexterrs = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
-                        self.buf_errs_last[sli] = nexterrs
-                        nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs, acs, states, nextnews)
-                    else :
-                        nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs)
+                        self.buf_obpreds_last[sli] = nextobpreds
+                        policy_input.append(nexterrs)
+                        policy_input.append(nextnews)
+                        if 'pred' in self.policy_mode:
+                            policy_input.append(nextobpreds)
+                        # nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs)
+                    if 'ac' in self.policy_mode:
+                        policy_input.append(acs)
+                        # nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs, acs, states, nextnews)
+                    if 'rnn' in self.policy_mode:
+                        policy_input.append(states)
+
+                        # nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, states, nextnews) # RNN!
+                    policy_output = self.policy.get_ac_value_nlp(*policy_input)
+                    if len(policy_output) == 3:
+                        nextacs, self.buf_vpred_last[sli], _ = policy_output
+                    elif len(policy_output) == 4:
+                        nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = policy_output
 
     def update_info(self):
         all_ep_infos = MPI.COMM_WORLD.allgather(self.ep_infos_new)

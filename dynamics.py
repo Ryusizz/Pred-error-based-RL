@@ -97,7 +97,7 @@ class Dynamics(SaveLoad):
         #                      {self.obs: ob, self.ac: acs})
 
     def calculate_err(self, ob, last_ob, acs):
-        return getsess().run(self.pred_error,
+        return getsess().run([self.pred_error, self.pred_features],
                              {self.obs: ob, self.last_ob: last_ob, self.ac: acs})
 
 

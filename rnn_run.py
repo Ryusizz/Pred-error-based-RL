@@ -18,7 +18,7 @@ from stable_baselines.common import tf_util
 from mpi4py import MPI
 
 from auxiliary_tasks import FeatureExtractor, InverseDynamics, VAE, JustPixels
-from rnn_policy import RnnPolicy, ErrorRnnPolicy, ErrorActRnnPolicy
+from rnn_policy import *
 from rppo_agent import RnnPpoOptimizer
 from dynamics import Dynamics, UNet
 from utils import random_agent_ob_mean_std
@@ -56,7 +56,8 @@ class Trainer(object):
 
         self.policy = {"rnn" : RnnPolicy,
                        "rnnerr" : ErrorRnnPolicy,
-                       "rnnerrac" : ErrorActRnnPolicy}[hps['policy_mode']]
+                       "rnnerrac" : ErrorActRnnPolicy,
+                       "rnnerrpred" : ErrorPredRnnPolicy}[hps['policy_mode']]
         self.action_policy = self.policy(
             ob_space=self.ob_space,
             ac_space=self.ac_space,
@@ -266,10 +267,10 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--policy_mode', type=str, default="rnnerrac",
-                        choices=["rnn", "rnnerr", "rnnerrac"]) # New
+    parser.add_argument('--policy_mode', type=str, default="rnnerrpred",
+                        choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred"]) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
-    parser.add_argument('--tboard_period', type=int, default=2) # New
+    parser.add_argument('--tboard_period', type=int, default=10) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
     parser.add_argument('--save_dynamics', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=None)
