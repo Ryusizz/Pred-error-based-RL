@@ -108,7 +108,6 @@ class Rollout(object):
             sli = slice(l * self.lump_stride, (l + 1) * self.lump_stride)
 
             policy_input = [obs]
-
             if 'err' in self.policy_mode:
                 if t == 0:
                     obpreds = self.buf_obpreds_last[sli]
@@ -119,7 +118,6 @@ class Rollout(object):
                     c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
                     errs, obpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
                 policy_input.append(errs)
-                policy_input.append(news)
                 if 'pred' in self.policy_mode:
                     policy_input.append(obpreds)
             if 'ac' in self.policy_mode:
@@ -134,6 +132,7 @@ class Rollout(object):
                 elif t < self.nsteps:
                     states = self.buf_states[sli, t-1]
                 policy_input.append(states)
+                policy_input.append(news)
 
             policy_output = self.policy.get_ac_value_nlp(*policy_input)
             if len(policy_output) == 3:
@@ -229,7 +228,6 @@ class Rollout(object):
                         self.buf_errs_last[sli] = nexterrs
                         self.buf_obpreds_last[sli] = nextobpreds
                         policy_input.append(nexterrs)
-                        policy_input.append(nextnews)
                         if 'pred' in self.policy_mode:
                             policy_input.append(nextobpreds)
                         # nextacs, self.buf_vpred_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs)
@@ -238,6 +236,7 @@ class Rollout(object):
                         # nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, nexterrs, acs, states, nextnews)
                     if 'rnn' in self.policy_mode:
                         policy_input.append(states)
+                        policy_input.append(nextnews)
 
                         # nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = self.policy.get_ac_value_nlp(nextobs, states, nextnews) # RNN!
                     policy_output = self.policy.get_ac_value_nlp(*policy_input)

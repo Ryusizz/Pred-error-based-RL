@@ -20,6 +20,7 @@ class RNN(object):
         self.n_env = n_env
         self.n_steps = n_steps
         self.n_batch = n_env * n_steps
+        self.n_lstm = n_lstm
         self.reuse = reuse
         with tf.variable_scope(scope):
             self.ob_space = ob_space
@@ -61,16 +62,27 @@ class RnnPolicy(RNN):
     def __init__(self, ob_space, ac_space, hidsize,
                  ob_mean, ob_std, feat_dim, layernormalize, nl,
                  n_env, n_steps, reuse, n_lstm=256, scope="policy"):
-        super(RNN, self).__init__(ob_space, ac_space, hidsize,
+        super(RnnPolicy, self).__init__(ob_space, ac_space, hidsize,
                             ob_mean, ob_std, feat_dim, layernormalize, nl,
                             n_env, n_steps, reuse, n_lstm, scope)
 
         with tf.variable_scope(scope, reuse=self.reuse):
-            input_sequence = batch_to_seq(self.flat_features, self.n_env, self.n_steps)
+            ## Use features
+            x = self.flat_features
+
+            input_sequence = batch_to_seq(x, self.n_env, self.n_steps)
             masks = batch_to_seq(self.masks_ph, self.n_env, self.n_steps)
             rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
                                          layer_norm=False)
             rnn_output = seq_to_batch(rnn_output)
+
+            ## Concat
+            q = self.flat_features
+            q = fc(q, units=hidsize, activation=activ, name="fc1")
+            q = tf.concat([q, rnn_output], axis=1)
+            q = fc(q, units=hidsize, activation=activ, name="fc2")
+            rnn_output = q
+
             pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
             vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
         pdparam = unflatten_first_dim(pdparam, self.sh)
@@ -142,7 +154,7 @@ class ErrorRnnPolicy(RNN):
             self.entropy = pd.entropy()
             self.nlp_samp = pd.neglogp(self.a_samp)
 
-    def get_ac_value_nlp(self, ob, err, mask, state=None):
+    def get_ac_value_nlp(self, ob, err, state=None, mask=None):
         a, vpred, snew, nlp = \
             getsess().run([self.a_samp, self.vpred, self.snew, self.nlp_samp],
                           feed_dict={self.ph_ob: ob[:, None], self.states_ph: state, self.masks_ph: mask[:, None], self.pred_error: err[:, None]})
@@ -153,7 +165,7 @@ class ErrorActRnnPolicy(RNN):
     def __init__(self, ob_space, ac_space, hidsize,
                  ob_mean, ob_std, feat_dim, layernormalize, nl,
                  n_env, n_steps, reuse, n_lstm=256, scope="policy"):
-        super(RNN, self).__init__(ob_space, ac_space, hidsize,
+        super(ErrorActRnnPolicy, self).__init__(ob_space, ac_space, hidsize,
                             ob_mean, ob_std, feat_dim, layernormalize, nl,
                             n_env, n_steps, reuse, n_lstm, scope)
         with tf.variable_scope(scope):
@@ -285,7 +297,78 @@ class ErrorPredRnnPolicy(RNN):
             self.entropy = pd.entropy()
             self.nlp_samp = pd.neglogp(self.a_samp)
 
-    def get_ac_value_nlp(self, ob, err, mask, obpred, state=None):
+    def get_ac_value_nlp(self, ob, err, obpred, state=None, mask=None):
+        a, vpred, snew, nlp = \
+            getsess().run([self.a_samp, self.vpred, self.snew, self.nlp_samp],
+                          feed_dict={self.ph_ob: ob[:, None], self.states_ph: state, self.masks_ph: mask[:, None],
+                                     self.pred_error: err[:, None], self.obs_pred: obpred[:, None]})
+        return a[:, 0], vpred[:, 0], snew, nlp[:, 0]
+
+class ErrorPredE2ERnnPolicy(RNN):
+    def __init__(self, ob_space, ac_space, hidsize,
+                 ob_mean, ob_std, feat_dim, layernormalize, nl,
+                 n_env, n_steps, reuse, n_lstm=256, scope="policy"):
+        super(ErrorPredE2ERnnPolicy, self).__init__(ob_space, ac_space, hidsize,
+                            ob_mean, ob_std, feat_dim, layernormalize, nl,
+                            n_env, n_steps, reuse, n_lstm, scope)
+
+    def prepare_else(self, dynamics):
+        self.dynamics = dynamics
+        with tf.variable_scope(self.scope):
+            self.flat_masks_ph = tf.reshape(self.masks_ph, [self.n_env * self.n_steps])
+            # self.pred_error = tf.placeholder(dtype=tf.float32, shape=(self.n_env, self.n_steps, self.hidsize),
+            #                                  name='pred_error')  # prediction error
+            self.pred_error = self.dynamics.pred_error
+            self.flat_pred_error = flatten_two_dims(self.pred_error)
+
+            # self.obs_pred = tf.placeholder(dtype=tf.float32, shape=(self.n_env, self.n_steps, self.hidsize),
+            #                                name='obs_pred')
+            self.obs_pred = self.dynamics.pred_features
+            self.flat_obs_pred = flatten_two_dims(self.obs_pred)
+
+            with tf.variable_scope(self.scope, reuse=self.reuse):
+                ## Error + Action Embeding
+                # x = tf.concat([self.flat_features, self.flat_pred_error], axis=1)
+                # x = fc(x, units=128, activation=activ, name="ErrAc_Embed_1")
+                # x = fc(x, units=self.hidsize, activation=activ, name="ErrAc_Embed_2")
+                # x = tf.concat([self.flat_features, x], axis=1)
+
+                ## Concat
+                x = tf.concat([self.flat_features, self.flat_obs_pred, self.flat_pred_error], axis=1)
+
+                ## Add
+                # q = fc(self.flat_pred_error, units=hidsize, activation=activ, use_bias=False, name="error_embed")
+                # k = fc(self.flat_features, units=hidsize, activation=activ, use_bias=False, name="feature_embed")
+                # x = q + k
+
+                ## ObStErrRe
+                # x = self.flat_pred_error
+
+                input_sequence = batch_to_seq(x, self.n_env, self.n_steps)
+                masks = batch_to_seq(self.masks_ph, self.n_env, self.n_steps)
+                rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=self.n_lstm,
+                                             layer_norm=False)
+                # rnn_output, self.snew = lnlstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm)
+                rnn_output = seq_to_batch(rnn_output)
+                rnn_output = layernorm(rnn_output)
+
+                ## Concat
+                q = self.flat_features
+                q = fc(q, units=self.hidsize, activation=activ, name="fc1")
+                q = tf.concat([q, rnn_output], axis=1)
+                q = fc(q, units=self.hidsize, activation=activ, name="fc2")
+                rnn_output = q
+
+                pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
+                vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
+            pdparam = unflatten_first_dim(pdparam, self.sh)
+            self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
+            self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            self.a_samp = pd.sample()
+            self.entropy = pd.entropy()
+            self.nlp_samp = pd.neglogp(self.a_samp)
+
+    def get_ac_value_nlp(self, ob, err, obpred, state=None, mask=None):
         a, vpred, snew, nlp = \
             getsess().run([self.a_samp, self.vpred, self.snew, self.nlp_samp],
                           feed_dict={self.ph_ob: ob[:, None], self.states_ph: state, self.masks_ph: mask[:, None],

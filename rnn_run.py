@@ -57,7 +57,8 @@ class Trainer(object):
         self.policy = {"rnn" : RnnPolicy,
                        "rnnerr" : ErrorRnnPolicy,
                        "rnnerrac" : ErrorActRnnPolicy,
-                       "rnnerrpred" : ErrorPredRnnPolicy}[hps['policy_mode']]
+                       "rnnerrpred" : ErrorPredRnnPolicy,
+                       'rnnerrprede2e' : ErrorPredE2ERnnPolicy}[hps['policy_mode']]
         self.action_policy = self.policy(
             ob_space=self.ob_space,
             ac_space=self.ac_space,
@@ -109,7 +110,9 @@ class Trainer(object):
                                             predict_from_pixels=hps['dyn_from_pixels'],
                                             feat_dim=512,
                                             reuse=True)
-
+        if 'e2e' in hps['policy_mode']:
+            self.action_policy.prepare_else(self.action_dynamics)
+            self.train_policy.prepare_else(self.train_dynamics)
 
         self.agent = RnnPpoOptimizer(
             scope='ppo',
@@ -267,8 +270,8 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--policy_mode', type=str, default="rnnerrpred",
-                        choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred"]) # New
+    parser.add_argument('--policy_mode', type=str, default="rnnerrprede2e",
+                        choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred", "rnnerrprede2e"]) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=10) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
