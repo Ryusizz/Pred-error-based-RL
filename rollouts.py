@@ -46,12 +46,15 @@ class Rollout(object):
         # self.buf_fpred = np.empty((nenvs, self.nsteps, *self.dynamics.pred_error.shape), self.dynamics.dtype) # New
         # print(dynamics.pred_error.shape)
         # print(dynamics.pred_error.dtype)
-        self.buf_errs = np.zeros((nenvs, self.nsteps, 512), np.float32) # New
+        # self.buf_errs = np.zeros((nenvs, self.nsteps, 512), np.float32) # New
+        self.buf_errs = np.random.normal(size=(nenvs, self.nsteps, 512))  # New
         self.buf_errs_last = self.buf_errs[:, 0, ...].copy() # New
-        self.buf_obpreds = np.zeros((nenvs, self.nsteps, 512), np.float32)
+        # self.buf_obpreds = np.zeros((nenvs, self.nsteps, 512), np.float32)
+        self.buf_obpreds = np.random.normal(size=(nenvs, self.nsteps, 512))
         self.buf_obpreds_last = self.buf_obpreds[:, 0, ...].copy()
-        self.buf_states = np.zeros((nenvs, self.nsteps, 512), np.float32) # RNN
-        self.buf_states_last = self.buf_states[:, 0, ...].copy()
+        # self.buf_states = np.zeros((nenvs, self.nsteps, 512), np.float32) # RNN
+        self.buf_states = np.random.normal(size=(nenvs, self.nsteps, 512))
+        # self.buf_states_last = self.buf_states[:, 0, ...].copy()
         self.buf_states_first = self.buf_states[:, 0, ...].copy()
 
         self.env_results = [None] * self.nlumps
@@ -127,8 +130,8 @@ class Rollout(object):
                 policy_input.append(acs_before)
             if 'rnn' in self.policy_mode:
                 if t == 0:
-                    states = self.buf_states_last[sli]
-                    self.buf_states_first[sli] = states
+                    # states = self.buf_states_last[sli]
+                    self.buf_states_first[sli] = states = self.buf_states[sli, -1]
                 elif t < self.nsteps:
                     states = self.buf_states[sli, t-1]
                 policy_input.append(states)
@@ -191,6 +194,7 @@ class Rollout(object):
             #     acs, vpreds, nlps = self.policy.get_ac_value_nlp(obs)
 
             self.env_step(l, acs)
+            # print("actions : ", acs)
 
             # self.prev_feat[l] = dyn_feat
             # self.prev_acs[l] = acs
@@ -216,6 +220,7 @@ class Rollout(object):
                 sli = slice(l * self.lump_stride, (l + 1) * self.lump_stride)
                 nextobs, ext_rews, nextnews, _ = self.env_get(l)
                 self.buf_obs_last[sli, t // self.nsteps_per_seg] = nextobs
+                # self.buf_states_last[sli, t // self.nsteps_per_set] = states
                 if t == self.nsteps - 1:
                     self.buf_new_last[sli] = nextnews
                     self.buf_ext_rews[sli, t] = ext_rews
@@ -243,7 +248,8 @@ class Rollout(object):
                     if len(policy_output) == 3:
                         nextacs, self.buf_vpred_last[sli], _ = policy_output
                     elif len(policy_output) == 4:
-                        nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = policy_output
+                        # nextacs, self.buf_vpred_last[sli], self.buf_states_last[sli], _ = policy_output
+                        nextacs, self.buf_vpred_last[sli], _, _ = policy_output
 
     def update_info(self):
         all_ep_infos = MPI.COMM_WORLD.allgather(self.ep_infos_new)

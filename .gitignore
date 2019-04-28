@@ -108,3 +108,6 @@ venv.bak/
 .idea/
 testbed.py
 *.swp
+record_instruction.txt
+test_flappy.py
+test_PLE.py

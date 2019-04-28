@@ -67,6 +67,8 @@ class ProcessFrame84(gym.ObservationWrapper):
             img = np.reshape(frame, [250, 160, 3]).astype(np.float32)
         elif frame.size == 224 * 240 * 3:  # mario resolution
             img = np.reshape(frame, [224, 240, 3]).astype(np.float32)
+        elif frame.size == 512 * 288 * 3:  # bird resolution
+            img = np.reshape(frame, [512, 288, 3]).astype(np.float32)
         else:
             assert False, "Unknown resolution." + str(frame.size)
         img = img[:, :, 0] * 0.299 + img[:, :, 1] * 0.587 + img[:, :, 2] * 0.114

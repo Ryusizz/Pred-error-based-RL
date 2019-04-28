@@ -1,10 +1,13 @@
+import gym
 import tensorflow as tf
 import os
 import numpy as np
-from baselines.common.distributions import make_pdtype
+# from baselines.common.distributions import make_pdtype
+from stable_baselines.common.distributions import make_proba_dist_type
 from stable_baselines.a2c.utils import conv, linear, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
 
-from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten_first_dim, small_convnet_wodense, fc_regboard, layernorm
+from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten_first_dim, small_convnet_wodense, \
+    fc_regboard, layernorm, get_action_n
 import tensor2tensor.layers.common_attention as attention
 
 class RNN(object):
@@ -25,7 +28,8 @@ class RNN(object):
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
-            self.ac_pdtype = make_pdtype(ac_space)
+            # self.ac_pdtype = make_pdtype(ac_space)
+            self.ac_pdtype = make_proba_dist_type(ac_space)
             self.ph_ob = tf.placeholder(dtype=tf.int32,
                                         shape=(self.n_env, self.n_steps) + ob_space.shape, name='ob')
             self.ph_ac = self.ac_pdtype.sample_placeholder([self.n_env, self.n_steps], name='ac')
@@ -57,6 +61,23 @@ class RNN(object):
             x = unflatten_first_dim(x, sh)
         return x
 
+    def get_pdparam(self, x):
+        # if isinstance(self.ac_space, gym.spaces.Box):
+        #     # pd, a_means, vpred = self.ac_pdtype.proba_distribution_from_latent(rnn_output, rnn_output)
+        #     init_scale = init_bias = 1.
+        #     mean = linear(x, 'pi', get_action_n(self.ac_space), init_scale=init_scale, init_bias=init_bias)
+        #     logstd = tf.get_variable(name='pi/logstd', shape=[1, get_action_n(self.ac_space)],
+        #                              initializer=tf.zeros_initializer())
+        #     pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
+        #     vpred = linear(x, 'value_function_output', get_action_n(self.ac_space), init_scale=init_scale,
+        #                    init_bias=init_bias)
+        #     # self.pd = pd
+        #     # self.vpred = vpred
+        # else:
+        pdparam = fc(x, name='pd', units=self.pdparamsize, activation=None)
+        vpred = fc(x, name='value_function_output', units=1, activation=None)
+        return pdparam, vpred
+
 
 class RnnPolicy(RNN):
     def __init__(self, ob_space, ac_space, hidsize,
@@ -75,19 +96,33 @@ class RnnPolicy(RNN):
             rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
                                          layer_norm=False)
             rnn_output = seq_to_batch(rnn_output)
+            layernorm(rnn_output)
 
             ## Concat
             q = self.flat_features
-            q = fc(q, units=hidsize, activation=activ, name="fc1")
             q = tf.concat([q, rnn_output], axis=1)
+            q = fc(q, units=hidsize, activation=activ, name="fc1")
             q = fc(q, units=hidsize, activation=activ, name="fc2")
             rnn_output = q
 
-            pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
-            vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
-        pdparam = unflatten_first_dim(pdparam, self.sh)
+            # if isinstance(self.ac_space, gym.spaces.Box):
+            #     # pd, a_means, vpred = self.ac_pdtype.proba_distribution_from_latent(rnn_output, rnn_output)
+            #     init_scale = init_bias = 1.
+            #     mean = linear(rnn_output, 'pi', get_action_n(self.ac_space), init_scale=init_scale, init_bias=init_bias)
+            #     logstd = tf.get_variable(name='pi/logstd', shape=[1, get_action_n(self.ac_space)], initializer=tf.zeros_initializer())
+            #     pdparam = tf.concat([mean, mean * 0.0 + logstd], axis=1)
+            #     vpred = linear(rnn_output, 'value_function_output', get_action_n(self.ac_space), init_scale=init_scale, init_bias=init_bias)
+            #     # self.pd = pd
+            #     # self.vpred = vpred
+            # else:
+            #     pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
+            #     vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
+            pdparam, vpred = self.get_pdparam(rnn_output)
+
+        self.pdparam = pdparam = unflatten_first_dim(pdparam, self.sh)
         self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
-        self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+        # self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+        self.pd = pd = self.ac_pdtype.proba_distribution_from_flat(pdparam)
         self.a_samp = pd.sample()
         self.entropy = pd.entropy()
         self.nlp_samp = pd.neglogp(self.a_samp)
@@ -149,7 +184,8 @@ class ErrorRnnPolicy(RNN):
                 vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
             pdparam = unflatten_first_dim(pdparam, self.sh)
             self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
-            self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            # self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            self.pd = pd = self.ac_pdtype.proba_distribution_from_flat(pdparam)
             self.a_samp = pd.sample()
             self.entropy = pd.entropy()
             self.nlp_samp = pd.neglogp(self.a_samp)
@@ -221,7 +257,8 @@ class ErrorActRnnPolicy(RNN):
                 vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
             pdparam = unflatten_first_dim(pdparam, self.sh)
             self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
-            self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            # self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            self.pd = pd = self.ac_pdtype.proba_distribution_from_flat(pdparam)
             self.a_samp = pd.sample()
             self.entropy = pd.entropy()
             self.nlp_samp = pd.neglogp(self.a_samp)
@@ -283,16 +320,18 @@ class ErrorPredRnnPolicy(RNN):
 
                 ## Concat
                 q = self.flat_features
-                q = fc(q, units=hidsize, activation=activ, name="fc1")
                 q = tf.concat([q, rnn_output], axis=1)
+                q = fc(q, units=hidsize, activation=activ, name="fc1")
                 q = fc(q, units=hidsize, activation=activ, name="fc2")
                 rnn_output = q
 
-                pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
-                vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
-            pdparam = unflatten_first_dim(pdparam, self.sh)
+                # pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
+                # vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
+                pdparam, vpred = self.get_pdparam(rnn_output)
+            self.pdparam = pdparam = unflatten_first_dim(pdparam, self.sh)
             self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
-            self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            # self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            self.pd = pd = self.ac_pdtype.proba_distribution_from_flat(pdparam)
             self.a_samp = pd.sample()
             self.entropy = pd.entropy()
             self.nlp_samp = pd.neglogp(self.a_samp)
@@ -323,7 +362,7 @@ class ErrorPredE2ERnnPolicy(RNN):
 
             # self.obs_pred = tf.placeholder(dtype=tf.float32, shape=(self.n_env, self.n_steps, self.hidsize),
             #                                name='obs_pred')
-            self.obs_pred = self.dynamics.pred_features
+            self.obs_pred = tf.stop_gradient(self.dynamics.pred_features)
             self.flat_obs_pred = flatten_two_dims(self.obs_pred)
 
             with tf.variable_scope(self.scope, reuse=self.reuse):
@@ -354,8 +393,8 @@ class ErrorPredE2ERnnPolicy(RNN):
 
                 ## Concat
                 q = self.flat_features
-                q = fc(q, units=self.hidsize, activation=activ, name="fc1")
                 q = tf.concat([q, rnn_output], axis=1)
+                q = fc(q, units=self.hidsize, activation=activ, name="fc1")
                 q = fc(q, units=self.hidsize, activation=activ, name="fc2")
                 rnn_output = q
 
@@ -363,7 +402,8 @@ class ErrorPredE2ERnnPolicy(RNN):
                 vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
             pdparam = unflatten_first_dim(pdparam, self.sh)
             self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
-            self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            # self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
+            self.pd = pd = self.ac_pdtype.proba_distribution_from_flat(pdparam)
             self.a_samp = pd.sample()
             self.entropy = pd.entropy()
             self.nlp_samp = pd.neglogp(self.a_samp)

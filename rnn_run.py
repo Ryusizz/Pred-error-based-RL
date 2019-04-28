@@ -25,6 +25,13 @@ from utils import random_agent_ob_mean_std
 from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_robo_hockey, \
     make_multi_pong, AddRandomStateToInfo, MaxAndSkipEnv, ProcessFrame84, ExtraTimeLimit
 
+# Troubleshooting
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+import os
+os.environ['SDL_AUDIODRIVER'] = 'dsp'
+
 def start_experiment(**args):
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
     logdir = osp.join("/result", args['env'], args['exp_name'], datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f"))
@@ -205,6 +212,29 @@ def make_env_all_params(rank, add_monitor, args):
             env = make_robo_pong()
         elif args["env"] == "hockey":
             env = make_robo_hockey()
+    elif args["env_kind"] == 'field':
+        import gym_fieldedmove
+        env = gym.make('FieldedMove-v0')
+        # env.set_mode('human')
+    elif args["env_kind"] == "bird":
+        import gym_ple
+        env = gym.make('FlappyBird-v0')
+        # env = NoopResetEnv(env, noop_max=args['noop_max'])
+        env._max_episode_steps = args['max_episode_steps']
+        # env.game_state.rng = np.random.RandomState()
+        env = ProcessFrame84(env, crop=False)
+        # env = ExtraTimeLimit(env, args['max_episode_steps'])
+        env = FrameStack(env, 4)
+    elif args["env_kind"] == 'carracing':
+        # import roboenvs as robo
+        env = gym.make("CarRacing-v0")
+        # env = NoopResetEnv(env, noop_max=args['noop_max'])
+        # env = robo.DiscretizeActionWrapper(env, 2)
+        env = MaxAndSkipEnv(env, skip=4)
+        env = ProcessFrame84(env, crop=False)
+        env = FrameStack(env, 4)
+        env = ExtraTimeLimit(env, args['max_episode_steps'])
+        env = AddRandomStateToInfo(env)
 
     if add_monitor:
         env = Monitor(env, osp.join(logger.get_dir(), '%.2i' % rank))
@@ -225,10 +255,10 @@ def get_experiment_environment(**args):
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='SeaquestNoFrameskip-v4',
+    parser.add_argument('--env', help='environment ID', default='FieldedMove-v0',
                         type=str)
-    parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=15000, type=int)
-    parser.add_argument('--env_kind', type=str, default="atari")
+    parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=30000, type=int)
+    parser.add_argument('--env_kind', type=str, default="field")
     parser.add_argument('--noop_max', type=int, default=30)
 
 
@@ -243,7 +273,7 @@ def add_optimization_params(parser):
     parser.add_argument('--dyn_coeff', type=float, default=1)
     parser.add_argument('--aux_coeff', type=float, default=1)
     parser.add_argument('--nepochs', type=int, default=3)
-    parser.add_argument('--num_timesteps', type=int, default=int(1e5))
+    parser.add_argument('--num_timesteps', type=int, default=int(1e7))
 
 
 def add_rollout_params(parser):
@@ -270,7 +300,7 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="idf",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--policy_mode', type=str, default="rnnerrprede2e",
+    parser.add_argument('--policy_mode', type=str, default="rnnerrpred",
                         choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred", "rnnerrprede2e"]) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=10) # New

@@ -1,3 +1,4 @@
+import os
 import time
 
 import numpy as np
@@ -49,13 +50,13 @@ class RnnPpoOptimizer(object):
             self.policy_mode = policy_mode # New
             self.full_tensorboard_log = full_tensorboard_log # New
             self.tboard_period = tboard_period # New
-            self.ph_adv = tf.placeholder(tf.float32, [None, None])
-            self.ph_ret = tf.placeholder(tf.float32, [None, None])
-            self.ph_rews = tf.placeholder(tf.float32, [None, None])
-            self.ph_oldnlp = tf.placeholder(tf.float32, [None, None])
-            self.ph_oldvpred = tf.placeholder(tf.float32, [None, None])
-            self.ph_lr = tf.placeholder(tf.float32, [])
-            self.ph_cliprange = tf.placeholder(tf.float32, [])
+            self.ph_adv = tf.placeholder(tf.float32, [None, None], name='ph_adv')
+            self.ph_ret = tf.placeholder(tf.float32, [None, None], name='ph_ret')
+            self.ph_rews = tf.placeholder(tf.float32, [None, None], name='ph_rews')
+            self.ph_oldnlp = tf.placeholder(tf.float32, [None, None], name='ph_oldnlp')
+            self.ph_oldvpred = tf.placeholder(tf.float32, [None, None], name='ph_oldvpred')
+            self.ph_lr = tf.placeholder(tf.float32, [], name='ph_lr')
+            self.ph_cliprange = tf.placeholder(tf.float32, [], name='ph_cliprange')
             neglogpac = self.trainpol.pd.neglogp(self.trainpol.ph_ac)
             entropy = tf.reduce_mean(self.trainpol.pd.entropy())
             vpred = self.trainpol.vpred
@@ -81,6 +82,7 @@ class RnnPpoOptimizer(object):
             if self.full_tensorboard_log: # full Tensorboard logging
                 for var in params:
                     tf.summary.histogram(var.name, var)
+                # tf.summary.image(self.trainpol.pdparam)
             if MPI.COMM_WORLD.Get_rank() == 0:
                 self.summary_writer = tf.summary.FileWriter(self.logdir, graph=getsess())  # New
                 print("tensorboard dir : ", self.logdir)
@@ -212,6 +214,55 @@ class RnnPpoOptimizer(object):
                            (self.trainpol.ph_ac_first, resh(self.rollout.buf_acs_first))])
         if 'pred' in self.policy_mode:
             ph_buf.extend([(self.trainpol.obs_pred, resh(self.rollout.buf_obpreds))])
+
+        with open(os.getcwd() + "/record_instruction.txt", 'r') as rec_inst:
+            rec_n = []
+            rec_all_n = []
+            while True:
+                line = rec_inst.readline()
+                if not line: break
+                args = line.split()
+                rec_n.append(int(args[0]))
+                if len(args) > 1:
+                    rec_all_n.append(int(args[0]))
+            if self.n_updates in rec_n and MPI.COMM_WORLD.Get_rank() == 0:
+                print("Enter!")
+                with open(self.logdir + '/full_log' + str(self.n_updates) + '.pk', 'wb') as full_log:
+                    import pickle
+                    # debug_data = {ph.name: buf for (ph, buf) in ph_buf}
+                    debug_data = {"buf_obs" : self.rollout.buf_obs,
+                                  "buf_obs_last" : self.rollout.buf_obs_last,
+                                  "buf_acs" : self.rollout.buf_acs,
+                                  "buf_acs_first" : self.rollout.buf_acs_first,
+                                  "buf_news" : self.rollout.buf_news,
+                                  "buf_news_last" : self.rollout.buf_new_last,
+                                  "buf_rews" : self.rollout.buf_rews,
+                                  "buf_ext_rews" : self.rollout.buf_ext_rews}
+                    if self.n_updates in rec_all_n:
+                        debug_data.update({"buf_err": self.rollout.buf_errs,
+                                            "buf_err_last": self.rollout.buf_errs_last,
+                                            "buf_obpreds": self.rollout.buf_obpreds,
+                                            "buf_obpreds_last": self.rollout.buf_obpreds_last,
+                                            "buf_vpreds": self.rollout.buf_vpreds,
+                                            "buf_vpred_last": self.rollout.buf_vpred_last,
+                                            "buf_states": self.rollout.buf_states,
+                                            "buf_states_first": self.rollout.buf_states_first,
+                                            "buf_nlps": self.rollout.buf_nlps,})
+                        # debug_data.update(zip(['opt_' + ln for ln in self.loss_names], np.mean([mblossvals[0]], axis=0)))
+                        # debug_pdparam = []
+                        # debug_entropy = []
+                        # debug_nlp_samp = []
+                        # for start in range(0, self.nenvs * self.nsegs_per_env, envsperbatch):
+                        #     end = start + envsperbatch
+                        #     mbenvinds = envinds[start:end]
+                        #     fd = {ph: buf[mbenvinds] for (ph, buf) in ph_buf}
+                        #     fd.update({self.ph_lr: self.lr, self.ph_cliprange: self.cliprange})
+                        #     debug_output = getsess().run([self.trainpol.pdparam, self.trainpol.entropy, self.trainpol.nlp_samp], fd)
+                        #     debug_pdparam.append(debug_output[0])
+                        #     debug_entropy.append(debug_output[1])
+                        #     debug_nlp_samp.append(debug_output[2])
+                        # debug_data.update({"pdparam" : debug_pdparam, "entropy" : debug_entropy, "nlp_samp" : debug_nlp_samp})
+                    pickle.dump(debug_data, full_log)
 
         mblossvals = []
 

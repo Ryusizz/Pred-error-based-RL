@@ -4,6 +4,7 @@ import platform
 from functools import partial
 
 import cloudpickle
+import gym
 import numpy as np
 import tensorflow as tf
 from baselines.common.tf_util import normc_initializer
@@ -343,3 +344,9 @@ def _load_from_file(load_path):
 
     return data, params
 
+def get_action_n(action_space):
+    if isinstance(action_space, gym.spaces.Discrete):
+        return action_space.n
+    elif isinstance(action_space, gym.spaces.Box):
+        assert len(action_space.shape) == 1
+        return action_space.shape[0]

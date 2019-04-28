@@ -1,7 +1,8 @@
 import tensorflow as tf
 import os
 import numpy as np
-from baselines.common.distributions import make_pdtype
+# from baselines.common.distributions import make_pdtype
+from stable_baselines.common.distributions import make_proba_dist_type
 
 from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten_first_dim, small_convnet_wodense, fc_regboard, layernorm
 import tensor2tensor.layers.common_attention as attention
@@ -19,7 +20,8 @@ class CnnPolicy(object):
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
-            self.ac_pdtype = make_pdtype(ac_space)
+            # self.ac_pdtype = make_pdtype(ac_space)
+            self.ac_pdtype = make_proba_dist_type(ac_space)
             self.ph_ob = tf.placeholder(dtype=tf.int32,
                                         shape=(None, None) + ob_space.shape, name='ob')
             self.ph_ac = self.ac_pdtype.sample_placeholder([None, None], name='ac')
@@ -81,7 +83,8 @@ class PredErrorPolicy(CnnPolicy):
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
-            self.ac_pdtype = make_pdtype(ac_space)
+            # self.ac_pdtype = make_pdtype(ac_space)
+            self.ac_pdtype = make_proba_dist_type(ac_space)
             self.ph_ob = tf.placeholder(dtype=tf.int32,
                                         shape=(None, None) + ob_space.shape, name='ob')
             self.ph_ac = self.ac_pdtype.sample_placeholder([None, None], name='ac')
@@ -155,7 +158,8 @@ class ErrorAttentionPolicy(CnnPolicy):
         with tf.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
-            self.ac_pdtype = make_pdtype(ac_space)
+            # self.ac_pdtype = make_pdtype(ac_space)
+            self.ac_pdtype = make_proba_dist_type(ac_space)
             self.ph_ob = tf.placeholder(dtype=tf.int32,
                                         shape=(None, None) + ob_space.shape, name='ob')
             self.ph_ac = self.ac_pdtype.sample_placeholder([None, None], name='ac')

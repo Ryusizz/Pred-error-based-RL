@@ -1,11 +1,12 @@
 import os
 
+import gym
 import numpy as np
 import tensorflow as tf
 import cloudpickle
 
 from auxiliary_tasks import JustPixels
-from utils import small_convnet, flatten_two_dims, unflatten_first_dim, getsess, unet, SaveLoad
+from utils import small_convnet, flatten_two_dims, unflatten_first_dim, getsess, unet, SaveLoad, get_action_n
 
 
 class Dynamics(SaveLoad):
@@ -50,7 +51,10 @@ class Dynamics(SaveLoad):
         return x
 
     def predict_next(self, reuse):
-        ac = tf.one_hot(self.ac, self.ac_space.n, axis=2)
+        if isinstance(self.ac_space, gym.spaces.Discrete):
+            ac = tf.one_hot(self.ac, get_action_n(self.ac_space), axis=2)
+        else:
+            ac = self.ac
         sh = tf.shape(ac)
         ac = flatten_two_dims(ac)
 
@@ -117,7 +121,10 @@ class UNet(Dynamics):
 
     def get_loss(self):
         nl = tf.nn.leaky_relu
-        ac = tf.one_hot(self.ac, self.ac_space.n, axis=2)
+        if isinstance(self.ac_space, gym.spaces.Discrete):
+            ac = tf.one_hot(self.ac, get_action_n(self.ac_space), axis=2)
+        else:
+            ac = self.ac
         sh = tf.shape(ac)
         ac = flatten_two_dims(ac)
         ac_four_dim = tf.expand_dims(tf.expand_dims(ac, 1), 1)

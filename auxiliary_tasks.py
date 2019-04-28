@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 from utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_dim, small_deconvnet, _save_to_file, \
-    _load_from_file, getsess, SaveLoad
+    _load_from_file, getsess, SaveLoad, get_action_n
 
 
 class FeatureExtractor(SaveLoad):
@@ -96,9 +96,11 @@ class InverseDynamics(FeatureExtractor):
             sh = tf.shape(x)
             x = flatten_two_dims(x)
             x = fc(x, units=self.policy.hidsize, activation=activ)
-            x = fc(x, units=self.ac_space.n, activation=None)
+            # x = fc(x, units=self.ac_space.n, activation=None)
+            x = fc(x, units=get_action_n(self.ac_space), activation=None)
             param = unflatten_first_dim(x, sh)
-            idfpd = self.policy.ac_pdtype.pdfromflat(param)
+            # idfpd = self.policy.ac_pdtype.pdfromflat(param)
+            idfpd = self.policy.ac_pdtype.proba_distribution_from_flat(param)
             return idfpd.neglogp(self.ac)
 
 
