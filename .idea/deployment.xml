@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="Climax-X4">
+    <serverData>
+      <paths name="Climax-X4">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/Programming/Pred-error-based-RL" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Thought">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/Programming/Pred-error-based-RL" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

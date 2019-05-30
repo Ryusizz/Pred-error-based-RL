@@ -1,0 +1,1 @@
+from gym_fieldedmove.envs.fieldedmove_env import FieldedMove
