@@ -105,12 +105,13 @@ class InverseDynamics(FeatureExtractor):
 
 
 class VAE(FeatureExtractor):
-    def __init__(self, policy, features_shared_with_policy, feat_dim=None, layernormalize=False, spherical_obs=False):
+    def __init__(self, policy, features_shared_with_policy, feat_dim=None, layernormalize=False,
+                 spherical_obs=False, reuse=False):
         assert not layernormalize, "VAE features should already have reasonable size, no need to layer normalize them"
         self.spherical_obs = spherical_obs
         super(VAE, self).__init__(scope="vae", policy=policy,
                                   features_shared_with_policy=features_shared_with_policy,
-                                  feat_dim=feat_dim, layernormalize=False)
+                                  feat_dim=feat_dim, layernormalize=False, reuse=reuse)
         self.features = tf.split(self.features, 2, -1)[0]  # use mean only for features exposed to the dynamics
         self.next_features = tf.split(self.next_features, 2, -1)[0]
 
@@ -127,8 +128,8 @@ class VAE(FeatureExtractor):
             x = unflatten_first_dim(x, sh)
         return x
 
-    def get_loss(self):
-        with tf.variable_scope(self.scope):
+    def get_loss(self, reuse=False):
+        with tf.variable_scope(self.scope, reuse=reuse):
             posterior_mean, posterior_scale = tf.split(self.features, 2, -1)
             posterior_scale = tf.nn.softplus(posterior_scale)
             posterior_distribution = tf.distributions.Normal(loc=posterior_mean, scale=posterior_scale)
@@ -145,7 +146,7 @@ class VAE(FeatureExtractor):
             reconstruction_distribution = self.decoder(posterior_sample)
             norm_obs = self.add_noise_and_normalize(self.obs)
             reconstruction_likelihood = reconstruction_distribution.log_prob(norm_obs)
-            assert reconstruction_likelihood.get_shape().as_list()[2:] == [84, 84, 4]
+            assert reconstruction_likelihood.get_shape().as_list()[2:] == [84, 84, self.obs.get_shape()[-1]]
             reconstruction_likelihood = tf.reduce_sum(reconstruction_likelihood, [2, 3, 4])
 
             likelihood_lower_bound = reconstruction_likelihood - posterior_kl
@@ -163,7 +164,7 @@ class VAE(FeatureExtractor):
             sh = tf.shape(z)
             z = flatten_two_dims(z)
         with tf.variable_scope(self.scope + "decoder"):
-            z = small_deconvnet(z, nl=nl, ch=4 if self.spherical_obs else 8, positional_bias=True)
+            z = small_deconvnet(z, nl=nl, ch=self.obs.get_shape()[-1] if self.spherical_obs else 2*self.obs.get_shape()[-1], positional_bias=True)
             if z_has_timesteps:
                 z = unflatten_first_dim(z, sh)
             if self.spherical_obs:
@@ -181,17 +182,17 @@ class VAE(FeatureExtractor):
 
 class JustPixels(FeatureExtractor):
     def __init__(self, policy, features_shared_with_policy, feat_dim=None, layernormalize=None,
-                 scope='just_pixels'):
+                 scope='just_pixels', reuse=False):
         assert not layernormalize
         assert not features_shared_with_policy
         super(JustPixels, self).__init__(scope=scope, policy=policy,
                                          features_shared_with_policy=False,
-                                         feat_dim=None, layernormalize=None)
+                                         feat_dim=None, layernormalize=None, reuse=reuse)
 
     def get_features(self, x, reuse):
         with tf.variable_scope(self.scope + "_features", reuse=reuse):
             x = (tf.to_float(x) - self.ob_mean) / self.ob_std
         return x
 
-    def get_loss(self):
+    def get_loss(self, reuse=False):
         return tf.zeros((), dtype=tf.float32)

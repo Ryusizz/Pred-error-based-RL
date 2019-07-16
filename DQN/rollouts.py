@@ -142,6 +142,9 @@ class Rollout(object):
                 acs, vpreds, nlps = policy_output
             elif len(policy_output) == 4:
                 acs, vpreds, states, nlps = policy_output
+
+            policy_output = self.policy.get_ac_qval(*policy_input)
+            acs, Q = policy_output
             # print("state means :", states.mean(), " err means :", errs.mean())
 
             # if self.policy_mode in ['naiveerr', 'erratt'] :

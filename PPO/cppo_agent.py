@@ -8,7 +8,7 @@ from baselines.common.running_mean_std import RunningMeanStd
 from mpi4py import MPI
 
 from mpi_utils import MpiAdamOptimizer
-from rollouts import Rollout
+from PPO.rollouts import Rollout
 from utils import bcast_tf_vars_from_root, get_mean_and_std
 from vec_env import ShmemVecEnv as VecEnv
 

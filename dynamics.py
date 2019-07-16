@@ -34,7 +34,10 @@ class Dynamics(SaveLoad):
         self.pred_error = self.pred_features - tf.stop_gradient(self.out_features)
         with tf.variable_scope(self.scope + "_loss"):
             # self.loss = self.get_loss(self.pred_features)
-            self.loss = tf.reduce_mean(self.pred_error ** 2, -1)
+            if self.pred_error.get_shape().ndims == 3:
+                self.loss = tf.reduce_mean(self.pred_error ** 2, -1)
+            elif self.pred_error.get_shape().ndims == 5:
+                self.loss = tf.reduce_mean(self.pred_error ** 2, [2, 3, 4])
         self.params = tf.trainable_variables(self.scope)
 
     def get_features(self, x, reuse):
@@ -108,18 +111,18 @@ class Dynamics(SaveLoad):
 
 
 class UNet(Dynamics):
-    def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None, scope='pixel_dynamics'):
+    def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None, scope='pixel_dynamics', reuse=False):
         assert isinstance(auxiliary_task, JustPixels)
         assert not predict_from_pixels, "predict from pixels must be False, it's set up to predict from features that are normalized pixels."
         super(UNet, self).__init__(auxiliary_task=auxiliary_task,
                                    predict_from_pixels=predict_from_pixels,
                                    feat_dim=feat_dim,
-                                   scope=scope)
+                                   scope=scope, reuse=reuse)
 
     def get_features(self, x, reuse):
         raise NotImplementedError
 
-    def get_loss(self):
+    def predict_next(self, reuse):
         nl = tf.nn.leaky_relu
         if isinstance(self.ac_space, gym.spaces.Discrete):
             ac = tf.one_hot(self.ac, get_action_n(self.ac_space), axis=2)
@@ -138,12 +141,13 @@ class UNet(Dynamics):
                     [x, ac_four_dim + tf.zeros([sh[0], sh[1], sh[2], ac_four_dim.get_shape()[3].value], tf.float32)],
                     axis=-1)
 
-        with tf.variable_scope(self.scope):
+        with tf.variable_scope(self.scope, reuse=reuse):
             x = flatten_two_dims(self.features)
             x = unet(x, nl=nl, feat_dim=self.feat_dim, cond=add_ac)
             x = unflatten_first_dim(x, sh)
         self.prediction_pixels = x * self.ob_std + self.ob_mean
-        return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, [2, 3, 4])
+        # return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, [2, 3, 4])
+        return x
 
 
 

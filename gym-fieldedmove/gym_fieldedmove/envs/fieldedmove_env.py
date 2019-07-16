@@ -80,8 +80,8 @@ class FieldedMove(gym.Env):
 
 		#self.period = random.randint(1, 4)
 		self.period_x = 4 * random.random()
-		self.period_y = 4 * random.random()
-		# self.period_y = self.period_x
+		# self.period_y = 4 * random.random()
+		self.period_y = self.period_x
 
 		self._reset_task()
 		# if self.mode == "human":
