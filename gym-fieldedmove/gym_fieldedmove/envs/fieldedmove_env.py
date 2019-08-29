@@ -102,6 +102,7 @@ class FieldedMove(gym.Env):
 		self.goal_degree = random.random() * (2*np.pi)
 		self.goal = np.array([self.rad*np.sin(self.goal_degree), self.rad*np.cos(self.goal_degree)])
 		self.goal += self.center
+		self.goal = np.round(self.goal) #New: goal position discretization
 
 	def render(self, mode='console', close=False):
 		if mode == 'console':

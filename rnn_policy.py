@@ -13,7 +13,7 @@ import tensor2tensor.layers.common_attention as attention
 class RNN(object):
     def __init__(self, ob_space, ac_space, hidsize,
                  ob_mean, ob_std, feat_dim, layernormalize, nl,
-                 n_env, n_steps, reuse, n_lstm=256, scope="policy"):
+                 n_env, n_steps, reuse, n_lstm, scope="policy"):
         if layernormalize:
             print("Warning: policy is operating on top of layer-normed features. It might slow down the training.")
         self.layernormalize = layernormalize
@@ -82,7 +82,7 @@ class RNN(object):
 class RnnPolicy(RNN):
     def __init__(self, ob_space, ac_space, hidsize,
                  ob_mean, ob_std, feat_dim, layernormalize, nl,
-                 n_env, n_steps, reuse, n_lstm=256, scope="policy"):
+                 n_env, n_steps, reuse, n_lstm, scope="policy"):
         super(RnnPolicy, self).__init__(ob_space, ac_space, hidsize,
                             ob_mean, ob_std, feat_dim, layernormalize, nl,
                             n_env, n_steps, reuse, n_lstm, scope)
@@ -139,7 +139,7 @@ class RnnPolicy(RNN):
 class ErrorRnnPolicy(RNN):
     def __init__(self, ob_space, ac_space, hidsize,
                  ob_mean, ob_std, feat_dim, layernormalize, nl,
-                 n_env, n_steps, reuse, n_lstm=256, scope="policy"):
+                 n_env, n_steps, reuse, n_lstm, scope="policy"):
         super(ErrorRnnPolicy, self).__init__(ob_space, ac_space, hidsize,
                             ob_mean, ob_std, feat_dim, layernormalize, nl,
                             n_env, n_steps, reuse, n_lstm, scope)
@@ -200,7 +200,7 @@ class ErrorRnnPolicy(RNN):
 class ErrorActRnnPolicy(RNN):
     def __init__(self, ob_space, ac_space, hidsize,
                  ob_mean, ob_std, feat_dim, layernormalize, nl,
-                 n_env, n_steps, reuse, n_lstm=256, scope="policy"):
+                 n_env, n_steps, reuse, n_lstm, scope="policy"):
         super(ErrorActRnnPolicy, self).__init__(ob_space, ac_space, hidsize,
                             ob_mean, ob_std, feat_dim, layernormalize, nl,
                             n_env, n_steps, reuse, n_lstm, scope)
@@ -274,7 +274,7 @@ class ErrorActRnnPolicy(RNN):
 class ErrorPredRnnPolicy(RNN):
     def __init__(self, ob_space, ac_space, hidsize,
                  ob_mean, ob_std, feat_dim, layernormalize, nl,
-                 n_env, n_steps, reuse, n_lstm=256, scope="policy"):
+                 n_env, n_steps, reuse, n_lstm, scope="policy"):
         super(ErrorPredRnnPolicy, self).__init__(ob_space, ac_space, hidsize,
                             ob_mean, ob_std, feat_dim, layernormalize, nl,
                             n_env, n_steps, reuse, n_lstm, scope)

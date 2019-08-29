@@ -69,8 +69,8 @@ class Trainer(object):
         self.action_policy = self.policy(
             ob_space=self.ob_space,
             ac_space=self.ac_space,
-            hidsize=512,
-            feat_dim=512,
+            hidsize=hps['hidsize'], #256,
+            feat_dim=hps['hidsize'], #256,
             ob_mean=self.ob_mean,
             ob_std=self.ob_std,
             layernormalize=False,
@@ -78,14 +78,15 @@ class Trainer(object):
             n_env=hps['envs_per_process'],
             n_steps=1,
             reuse=False,
+            n_lstm=hps['hidsize']/2,
         )
         with tf.variable_scope("train_model", reuse=True,
                                custom_getter=tf_util.outer_scope_getter("train_model")):
             self.train_policy = self.policy(
                 ob_space=self.ob_space,
                 ac_space=self.ac_space,
-                hidsize=512,
-                feat_dim=512,
+                hidsize=hps['hidsize'], #256,
+                feat_dim=hps['hidsize'], #256,
                 ob_mean=self.ob_mean,
                 ob_std=self.ob_std,
                 layernormalize=False,
@@ -93,6 +94,7 @@ class Trainer(object):
                 n_env=hps['envs_per_process'] // hps['nminibatches'],
                 n_steps=hps['nsteps_per_seg'],
                 reuse=True,
+                n_lstm=hps['hidsize'] / 2,
             )
         self.feature_extractor = {"none": FeatureExtractor,
                                   "idf": InverseDynamics,
@@ -101,21 +103,21 @@ class Trainer(object):
                                   "pix2pix": JustPixels}[hps['feat_learning']]
         self.action_feature_extractor = self.feature_extractor(policy=self.action_policy,
                                                                features_shared_with_policy=hps['feat_sharedWpol'],
-                                                               feat_dim=512,
+                                                               feat_dim=hps['hidsize'], #256,
                                                                layernormalize=hps['layernorm'])
         self.train_feature_extractor = self.feature_extractor(policy=self.train_policy,
                                                               features_shared_with_policy=hps['feat_sharedWpol'],
-                                                              feat_dim=512,
+                                                              feat_dim=hps['hidsize'], #256,
                                                               layernormalize=hps['layernorm'],
                                                               reuse=True)
 
         self.dynamics = Dynamics if hps['feat_learning'] != 'pix2pix' else UNet
         self.action_dynamics = self.dynamics(auxiliary_task=self.action_feature_extractor,
                                              predict_from_pixels=hps['dyn_from_pixels'],
-                                             feat_dim=512)
+                                             feat_dim=hps['hidsize']) #256)
         self.train_dynamics = self.dynamics(auxiliary_task=self.train_feature_extractor,
                                             predict_from_pixels=hps['dyn_from_pixels'],
-                                            feat_dim=512,
+                                            feat_dim=hps['hidsize'], #256,
                                             reuse=True)
         if 'e2e' in hps['policy_mode']:
             self.action_policy.prepare_else(self.action_dynamics)
@@ -308,6 +310,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dynamics', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=None)
     parser.add_argument('--load_dir', type=str, default=None)
+    parser.add_argument('--hidsize', type=int, default=256)
 
     args = parser.parse_args()
 
