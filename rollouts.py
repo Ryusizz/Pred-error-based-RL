@@ -9,7 +9,7 @@ from utils import unflatten_first_dim
 
 class Rollout(object):
     def __init__(self, ob_space, ac_space, nenvs, nminibatches, nsteps_per_seg, nsegs_per_env, nlumps, envs, policy,
-                 int_rew_coeff, ext_rew_coeff, record_rollouts, train_dynamics, policy_mode, action_dynamics=None):
+                 int_rew_coeff, ext_rew_coeff, record_rollouts, train_dynamics, policy_mode, hidsize, action_dynamics=None):
         self.nenvs = nenvs
         self.nminibatches = nminibatches
         self.nsteps_per_seg = nsteps_per_seg
@@ -27,6 +27,7 @@ class Rollout(object):
         else:
             self.action_dynamics = self.train_dynamics
         self.policy_mode = policy_mode
+        self.hidsize = hidsize
 
         self.reward_fun = lambda ext_rew, int_rew: ext_rew_coeff * np.clip(ext_rew, -1., 1.) + int_rew_coeff * int_rew
 
@@ -47,13 +48,13 @@ class Rollout(object):
         # print(dynamics.pred_error.shape)
         # print(dynamics.pred_error.dtype)
         # self.buf_errs = np.zeros((nenvs, self.nsteps, 512), np.float32) # New
-        self.buf_errs = np.random.normal(size=(nenvs, self.nsteps, 512))  # New
+        self.buf_errs = np.random.normal(size=(nenvs, self.nsteps, self.hidsize))  # New
         self.buf_errs_last = self.buf_errs[:, 0, ...].copy() # New
         # self.buf_obpreds = np.zeros((nenvs, self.nsteps, 512), np.float32)
-        self.buf_obpreds = np.random.normal(size=(nenvs, self.nsteps, 512))
+        self.buf_obpreds = np.random.normal(size=(nenvs, self.nsteps, self.hidsize))
         self.buf_obpreds_last = self.buf_obpreds[:, 0, ...].copy()
         # self.buf_states = np.zeros((nenvs, self.nsteps, 512), np.float32) # RNN
-        self.buf_states = np.random.normal(size=(nenvs, self.nsteps, 512))
+        self.buf_states = np.random.normal(size=(nenvs, self.nsteps, self.hidsize))
         # self.buf_states_last = self.buf_states[:, 0, ...].copy()
         self.buf_states_first = self.buf_states[:, 0, ...].copy()
 

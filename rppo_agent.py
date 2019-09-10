@@ -23,7 +23,7 @@ class RnnPpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, action_dynamics, train_dynamics, policy_mode, logdir, full_tensorboard_log, tboard_period):
+                 nsteps_per_seg, nsegs_per_env, action_dynamics, train_dynamics, policy_mode, logdir, full_tensorboard_log, tboard_period, hidsize):
         self.action_dynamics = action_dynamics
         self.train_dynamics = train_dynamics
         with tf.variable_scope(scope):
@@ -47,6 +47,7 @@ class RnnPpoOptimizer(object):
             self.use_news = use_news
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
+            self.hidsize = hidsize
             self.policy_mode = policy_mode # New
             self.full_tensorboard_log = full_tensorboard_log # New
             self.tboard_period = tboard_period # New
@@ -122,7 +123,8 @@ class RnnPpoOptimizer(object):
                                record_rollouts=self.use_recorder,
                                train_dynamics=self.train_dynamics,
                                action_dynamics=self.action_dynamics,
-                               policy_mode=self.policy_mode)
+                               policy_mode=self.policy_mode,
+                               hidsize=self.hidsize,)
 
         self.buf_advs = np.zeros((nenvs, self.rollout.nsteps), np.float32)
         self.buf_rets = np.zeros((nenvs, self.rollout.nsteps), np.float32)

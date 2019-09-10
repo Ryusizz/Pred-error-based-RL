@@ -30,10 +30,12 @@ class FieldedMove(gym.Env):
 		self.window_width = 84
 		self.env_height = 84
 		self.env_width = 84
-		self.object_size = 7
+		self.goal_size = 7
+		self.agent_size = 7
 		self.rad = 25
 		self.n_max_trial = 10000
 		self.n_trial = None
+		self.field_change = True
 
 		self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self.env_height, self.env_width, 3), dtype=np.uint8)
 		self.action_space = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
@@ -78,11 +80,7 @@ class FieldedMove(gym.Env):
 		self.done = 0
 		self.n_trial = 0
 
-		#self.period = random.randint(1, 4)
-		self.period_x = 4 * random.random()
-		self.period_y = 4 * random.random()
-		# self.period_y = self.period_x
-
+		self._reset_field()
 		self._reset_task()
 		# if self.mode == "human":
 			# self.player_render = None  # Object(BLUE, self.object_size, self.position[0], self.position[1])
@@ -90,6 +88,13 @@ class FieldedMove(gym.Env):
 			# self.player_render = Object(BLUE, self.object_size, self.position[0], self.position[1])
 			# self.goal_render = Object(RED, self.object_size, self.goal[0], self.goal[1])
 		return self._update_state()
+
+	def _reset_field(self):
+		# self.period_x = random.randint(1, 4)
+		# self.period_y = random.randint(1, 4)
+		self.period_x = 4 * random.random()
+		self.period_y = 4 * random.random()
+		# self.period_y = self.period_x
 
 	def _reset_task(self):
 		self.center = np.array([self.window_height / 2., self.window_width / 2.])
@@ -125,9 +130,9 @@ class FieldedMove(gym.Env):
 					print("Initializing pygame: {0} successes and {1} failures.".format(successes, failures))
 					self.screen = pygame.display.set_mode((self.window_width, self.window_height))
 				if self.player_render is None:
-					self.player_render = Object(BLUE, self.object_size, self.position[0], self.position[1])
+					self.player_render = Object(BLUE, self.agent_size, self.position[0], self.position[1])
 				if self.goal_render is None:
-					self.goal_render = Object(RED, self.object_size, self.goal[0], self.goal[1])
+					self.goal_render = Object(RED, self.goal_size, self.goal[0], self.goal[1])
 
 				self.screen.fill(BLACK)
 
@@ -178,6 +183,8 @@ class FieldedMove(gym.Env):
 
 			self.render(self.mode)
 
+			# if self.count % 10 == 0 and self.field_change:
+			# 	self._reset_field()
 			if self.count > self.count_max or self.n_trial >= self.n_max_trial:
 				self.done = 1
 
@@ -185,11 +192,17 @@ class FieldedMove(gym.Env):
 
 
 	def _update_state(self):
-		self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
-		posX, posY = np.round(self.position).astype(int)
-		self.state[posY:posY + self.object_size, posX:posX + self.object_size] = BLUE
-		posX_g, posY_g = np.round(self.goal).astype(int)
-		self.state[posY_g:posY_g + self.object_size, posX_g:posX_g + self.object_size] = RED
+		# self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
+		# posX, posY = np.round(self.position).astype(int)
+		# self.state[posY:posY + self.agent_size, posX:posX + self.agent_size] = BLUE
+		# posX_g, posY_g = np.round(self.goal).astype(int)
+		# self.state[posY_g:posY_g + self.goal_size, posX_g:posX_g + self.goal_size] = RED
+		img = pygame.display.get_surface()
+		# print(img)
+		if img is not None:
+			self.state = pygame.surfarray.array3d(img)
+		else:
+			self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
 		return self.state
 
 	def _calculate_fieldforce(self, velocity):
@@ -244,6 +257,11 @@ def main():
 					target[0] -= f
 				elif event.key == pygame.K_d:
 					target[0] += f
+				elif event.key == pygame.K_q:
+					plt.imshow(state)
+					plt.ion()
+					plt.show()
+					plt.pause(0.025)
 			elif event.type == pygame.KEYUP:
 				if event.key == pygame.K_w:
 					target[1] += f
@@ -261,8 +279,7 @@ def main():
 			print("cumulative reward : ", value)
 			value = 0
 		time.sleep(0.1)
-		# plt.imshow(state)
-		# plt.show()
+
 
 	print("Exited the game loop. Game will quit...")
 	quit()

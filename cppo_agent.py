@@ -22,7 +22,7 @@ class PpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, dynamics, policy_mode, logdir, full_tensorboard_log, tboard_period):
+                 nsteps_per_seg, nsegs_per_env, dynamics, policy_mode, logdir, full_tensorboard_log, tboard_period, hidsize):
         self.dynamics = dynamics
         with tf.variable_scope(scope):
             self.use_recorder = True
@@ -44,6 +44,7 @@ class PpoOptimizer(object):
             self.use_news = use_news
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
+            self.hidsize = hidsize
             self.policy_mode = policy_mode # New
             self.full_tensorboard_log = full_tensorboard_log # New
             self.tboard_period = tboard_period # New
@@ -117,7 +118,8 @@ class PpoOptimizer(object):
                                ext_rew_coeff=self.ext_coeff,
                                record_rollouts=self.use_recorder,
                                train_dynamics=dynamics,
-                               policy_mode=self.policy_mode,)
+                               policy_mode=self.policy_mode,
+                               hidsize=self.hidsize)
 
         self.buf_advs = np.zeros((nenvs, self.rollout.nsteps), np.float32)
         self.buf_rets = np.zeros((nenvs, self.rollout.nsteps), np.float32)

@@ -21,6 +21,7 @@ class Dynamics(SaveLoad):
         self.last_ob = self.auxiliary_task.last_ob
         self.ac = self.auxiliary_task.ac
         self.ac_space = self.auxiliary_task.ac_space
+        self.rnn_output = self.auxiliary_task.rnn_output
         self.ob_mean = self.auxiliary_task.ob_mean
         self.ob_std = self.auxiliary_task.ob_std
         if predict_from_pixels:
@@ -57,9 +58,13 @@ class Dynamics(SaveLoad):
             ac = self.ac
         sh = tf.shape(ac)
         ac = flatten_two_dims(ac)
+        # rnn_output = self.rnn_output #flatten_two_dims(self.rnn_output)
+        # print(rnn_output.get_shape(), ac.get_shape())
 
         def add_ac(x):
             return tf.concat([x, ac], axis=-1)
+        # def add_ac_rnn(x):
+        #     return tf.concat([x, rnn_output, ac], axis=-1)
 
         with tf.variable_scope(self.scope, reuse=reuse):
             x = flatten_two_dims(self.features)

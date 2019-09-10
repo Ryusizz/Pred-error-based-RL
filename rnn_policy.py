@@ -93,17 +93,17 @@ class RnnPolicy(RNN):
 
             input_sequence = batch_to_seq(x, self.n_env, self.n_steps)
             masks = batch_to_seq(self.masks_ph, self.n_env, self.n_steps)
-            rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
+            self.rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
                                          layer_norm=False)
-            rnn_output = seq_to_batch(rnn_output)
-            layernorm(rnn_output)
+            self.rnn_output = seq_to_batch(self.rnn_output)
+            self.rnn_output = layernorm(self.rnn_output)
 
             ## Concat
             q = self.flat_features
-            q = tf.concat([q, rnn_output], axis=1)
+            q = tf.concat([q, self.rnn_output], axis=1)
             q = fc(q, units=hidsize, activation=activ, name="fc1")
             q = fc(q, units=hidsize, activation=activ, name="fc2")
-            rnn_output = q
+            # policy_output = q
 
             # if isinstance(self.ac_space, gym.spaces.Box):
             #     # pd, a_means, vpred = self.ac_pdtype.proba_distribution_from_latent(rnn_output, rnn_output)
@@ -117,7 +117,7 @@ class RnnPolicy(RNN):
             # else:
             #     pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
             #     vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
-            pdparam, vpred = self.get_pdparam(rnn_output)
+            pdparam, vpred = self.get_pdparam(q)
 
         self.pdparam = pdparam = unflatten_first_dim(pdparam, self.sh)
         self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
@@ -312,22 +312,22 @@ class ErrorPredRnnPolicy(RNN):
 
                 input_sequence = batch_to_seq(x, self.n_env, self.n_steps)
                 masks = batch_to_seq(self.masks_ph, self.n_env, self.n_steps)
-                rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
+                self.rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
                                              layer_norm=False)
                 # rnn_output, self.snew = lnlstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm)
-                rnn_output = seq_to_batch(rnn_output)
-                rnn_output = layernorm(rnn_output)
+                self.rnn_output = seq_to_batch(self.rnn_output)
+                self.rnn_output = layernorm(self.rnn_output)
 
                 ## Concat
                 q = self.flat_features
-                q = tf.concat([q, rnn_output], axis=1)
+                q = tf.concat([q, self.rnn_output], axis=1)
                 q = fc(q, units=hidsize, activation=activ, name="fc1")
                 q = fc(q, units=hidsize, activation=activ, name="fc2")
-                rnn_output = q
+                # rnn_output = q
 
                 # pdparam = fc(rnn_output, name='pd', units=self.pdparamsize, activation=None)
                 # vpred = fc(rnn_output, name='value_function_output', units=1, activation=None)
-                pdparam, vpred = self.get_pdparam(rnn_output)
+                pdparam, vpred = self.get_pdparam(q)
             self.pdparam = pdparam = unflatten_first_dim(pdparam, self.sh)
             self.vpred = unflatten_first_dim(vpred, self.sh)[:, :, 0]
             # self.pd = pd = self.ac_pdtype.pdfromflat(pdparam)
