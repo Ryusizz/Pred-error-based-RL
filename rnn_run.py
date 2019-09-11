@@ -149,7 +149,8 @@ class Trainer(object):
             logdir=logdir,
             full_tensorboard_log=hps['full_tensorboard_log'],
             tboard_period=hps['tboard_period'],
-            hidsize=hps['hidsize']
+            hidsize=hps['hidsize'],
+            n_lstm=hps['n_lstm']
         )
 
         self.agent.to_report['aux'] = tf.reduce_mean(self.train_feature_extractor.loss)
@@ -258,10 +259,10 @@ def get_experiment_environment(**args):
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='FieldedMove-v0',
+    parser.add_argument('--env', help='environment ID', default='SeaquestNoFrameskip-v4',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=30000, type=int)
-    parser.add_argument('--env_kind', type=str, default="field")
+    parser.add_argument('--env_kind', type=str, default="atari")
     parser.add_argument('--noop_max', type=int, default=30)
 
 
@@ -301,17 +302,18 @@ if __name__ == '__main__':
     parser.add_argument('--ext_coeff', type=float, default=1.)
     parser.add_argument('--int_coeff', type=float, default=0.)
     parser.add_argument('--layernorm', type=int, default=0)
-    parser.add_argument('--feat_learning', type=str, default="idf",
+    parser.add_argument('--feat_learning', type=str, default="none",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
     parser.add_argument('--policy_mode', type=str, default="rnnerrpred",
                         choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred", "rnnerrprede2e"]) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=10) # New
-    parser.add_argument('--feat_sharedWpol', type=int, default=0) # New
+    parser.add_argument('--feat_sharedWpol', type=int, default=1) # New
     parser.add_argument('--save_dynamics', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=None)
     parser.add_argument('--load_dir', type=str, default=None)
     parser.add_argument('--hidsize', type=int, default=512)
+    parser.add_argument('--n_lstm', type=int, default=256)
 
     args = parser.parse_args()
 

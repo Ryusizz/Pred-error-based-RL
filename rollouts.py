@@ -9,7 +9,7 @@ from utils import unflatten_first_dim
 
 class Rollout(object):
     def __init__(self, ob_space, ac_space, nenvs, nminibatches, nsteps_per_seg, nsegs_per_env, nlumps, envs, policy,
-                 int_rew_coeff, ext_rew_coeff, record_rollouts, train_dynamics, policy_mode, hidsize, action_dynamics=None):
+                 int_rew_coeff, ext_rew_coeff, record_rollouts, train_dynamics, policy_mode, hidsize, n_lstm, action_dynamics=None):
         self.nenvs = nenvs
         self.nminibatches = nminibatches
         self.nsteps_per_seg = nsteps_per_seg
@@ -28,6 +28,7 @@ class Rollout(object):
             self.action_dynamics = self.train_dynamics
         self.policy_mode = policy_mode
         self.hidsize = hidsize
+        self.n_lstm = n_lstm
 
         self.reward_fun = lambda ext_rew, int_rew: ext_rew_coeff * np.clip(ext_rew, -1., 1.) + int_rew_coeff * int_rew
 
@@ -54,7 +55,7 @@ class Rollout(object):
         self.buf_obpreds = np.random.normal(size=(nenvs, self.nsteps, self.hidsize))
         self.buf_obpreds_last = self.buf_obpreds[:, 0, ...].copy()
         # self.buf_states = np.zeros((nenvs, self.nsteps, 512), np.float32) # RNN
-        self.buf_states = np.random.normal(size=(nenvs, self.nsteps, self.hidsize))
+        self.buf_states = np.random.normal(size=(nenvs, self.nsteps, 2*self.n_lstm))
         # self.buf_states_last = self.buf_states[:, 0, ...].copy()
         self.buf_states_first = self.buf_states[:, 0, ...].copy()
 
@@ -81,9 +82,11 @@ class Rollout(object):
 
     def calculate_reward(self):
         if 'rnn' in self.policy_mode:
+            buf_states_prev = np.concatenate([np.expand_dims(self.buf_states_first, 1), self.buf_states[:, :-1, ...]], 1)
             int_rew = self.train_dynamics.calculate_loss(ob=self.buf_obs,
                                                    last_ob=self.buf_obs_last,
                                                    acs=self.buf_acs,
+                                                   states=buf_states_prev,
                                                    nminibatches=self.nminibatches)
         else:
             int_rew = self.train_dynamics.calculate_loss(ob=self.buf_obs,
@@ -120,7 +123,8 @@ class Rollout(object):
                     a = np.expand_dims(self.buf_obs[sli, t - 1], 1)
                     b = np.expand_dims(obs, 1)
                     c = np.expand_dims(self.buf_acs[sli, t - 1], 1)
-                    errs, obpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+                    d = np.expand_dims(self.buf_states[sli, t - 1], 1)
+                    errs, obpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c, d))
                 policy_input.append(errs)
                 if 'pred' in self.policy_mode:
                     policy_input.append(obpreds)
@@ -230,7 +234,8 @@ class Rollout(object):
                         a = np.expand_dims(obs, 1)
                         b = np.expand_dims(nextobs, 1)
                         c = np.expand_dims(acs, 1)
-                        nexterrs, nextobpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c))
+                        d = np.expand_dims(states, 1)
+                        nexterrs, nextobpreds = np.squeeze(self.action_dynamics.calculate_err(a, b, c, d))
                         self.buf_errs_last[sli] = nexterrs
                         self.buf_obpreds_last[sli] = nextobpreds
                         policy_input.append(nexterrs)

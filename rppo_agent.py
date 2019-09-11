@@ -23,7 +23,7 @@ class RnnPpoOptimizer(object):
                  ent_coef, gamma, lam, nepochs, lr, cliprange,
                  nminibatches,
                  normrew, normadv, use_news, ext_coeff, int_coeff,
-                 nsteps_per_seg, nsegs_per_env, action_dynamics, train_dynamics, policy_mode, logdir, full_tensorboard_log, tboard_period, hidsize):
+                 nsteps_per_seg, nsegs_per_env, action_dynamics, train_dynamics, policy_mode, logdir, full_tensorboard_log, tboard_period, hidsize, n_lstm):
         self.action_dynamics = action_dynamics
         self.train_dynamics = train_dynamics
         with tf.variable_scope(scope):
@@ -48,6 +48,7 @@ class RnnPpoOptimizer(object):
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
             self.hidsize = hidsize
+            self.n_lstm = n_lstm
             self.policy_mode = policy_mode # New
             self.full_tensorboard_log = full_tensorboard_log # New
             self.tboard_period = tboard_period # New
@@ -124,7 +125,8 @@ class RnnPpoOptimizer(object):
                                train_dynamics=self.train_dynamics,
                                action_dynamics=self.action_dynamics,
                                policy_mode=self.policy_mode,
-                               hidsize=self.hidsize,)
+                               hidsize=self.hidsize,
+                               n_lstm=self.n_lstm)
 
         self.buf_advs = np.zeros((nenvs, self.rollout.nsteps), np.float32)
         self.buf_rets = np.zeros((nenvs, self.rollout.nsteps), np.float32)
@@ -205,9 +207,12 @@ class RnnPpoOptimizer(object):
             (self.train_dynamics.last_ob,
              self.rollout.buf_obs_last.reshape([self.nenvs * self.nsegs_per_env, 1, *self.ob_space.shape]))
         ])
+        buf_states_prev = np.concatenate([np.expand_dims(self.rollout.buf_states_first, 1), self.rollout.buf_states[:, :-1, :]], 1)
+        buf_states_prev, _ = np.split(buf_states_prev, 2, axis=2)
         ph_buf.extend([
             (self.trainpol.states_ph, resh(self.rollout.buf_states_first)),     # rnn inputs
-            (self.trainpol.masks_ph, resh(self.rollout.buf_news))
+            (self.trainpol.masks_ph, resh(self.rollout.buf_news)),
+            (self.train_dynamics.rnn_state, resh(buf_states_prev)),
         ])
         if 'err' in self.policy_mode:
             ph_buf.extend([(self.trainpol.pred_error, resh(self.rollout.buf_errs))])  # New

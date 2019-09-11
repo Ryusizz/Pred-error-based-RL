@@ -192,17 +192,16 @@ class FieldedMove(gym.Env):
 
 
 	def _update_state(self):
-		# self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
-		# posX, posY = np.round(self.position).astype(int)
-		# self.state[posY:posY + self.agent_size, posX:posX + self.agent_size] = BLUE
-		# posX_g, posY_g = np.round(self.goal).astype(int)
-		# self.state[posY_g:posY_g + self.goal_size, posX_g:posX_g + self.goal_size] = RED
-		img = pygame.display.get_surface()
-		# print(img)
-		if img is not None:
-			self.state = pygame.surfarray.array3d(img)
-		else:
-			self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
+		self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
+		posX, posY = np.round(self.position).astype(int)
+		self.state[posY:posY + self.agent_size, posX:posX + self.agent_size] = BLUE
+		posX_g, posY_g = np.round(self.goal).astype(int)
+		self.state[posY_g:posY_g + self.goal_size, posX_g:posX_g + self.goal_size] = RED
+		# img = pygame.display.get_surface()
+		# if img is not None:
+		# 	self.state = pygame.surfarray.array3d(img)
+		# else:
+		# 	self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
 		return self.state
 
 	def _calculate_fieldforce(self, velocity):

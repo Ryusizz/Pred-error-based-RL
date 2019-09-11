@@ -312,15 +312,15 @@ class ErrorPredRnnPolicy(RNN):
 
                 input_sequence = batch_to_seq(x, self.n_env, self.n_steps)
                 masks = batch_to_seq(self.masks_ph, self.n_env, self.n_steps)
-                self.rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
+                rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
                                              layer_norm=False)
                 # rnn_output, self.snew = lnlstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm)
-                self.rnn_output = seq_to_batch(self.rnn_output)
-                self.rnn_output = layernorm(self.rnn_output)
+                rnn_output = seq_to_batch(rnn_output)
+                self.rnn_output = rnn_output = layernorm(rnn_output)
 
                 ## Concat
                 q = self.flat_features
-                q = tf.concat([q, self.rnn_output], axis=1)
+                q = tf.concat([q, rnn_output], axis=1)
                 q = fc(q, units=hidsize, activation=activ, name="fc1")
                 q = fc(q, units=hidsize, activation=activ, name="fc2")
                 # rnn_output = q
