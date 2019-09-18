@@ -218,7 +218,7 @@ def make_env_all_params(rank, add_monitor, args):
             env = make_robo_hockey()
     elif args["env_kind"] == 'field':
         import gym_fieldedmove
-        env = gym.make('FieldedMove-v0')
+        env = gym.make(args['env'])
         # env.set_mode('human')
     elif args["env_kind"] == "bird":
         import gym_ple

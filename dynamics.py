@@ -25,7 +25,7 @@ class Dynamics(SaveLoad):
         self.n_env = self.auxiliary_task.policy.n_env
         self.n_steps = self.auxiliary_task.policy.n_steps
         self.n_lstm = self.auxiliary_task.policy.n_lstm
-        self.rnn_state = tf.placeholder(tf.float32, [self.n_env, self.n_steps, self.n_lstm], name="rnn_state_ph")
+        self.rnn_state = tf.placeholder(tf.float32, [self.n_env, self.n_steps, 2*self.n_lstm], name="rnn_state_ph")
         self.ob_mean = self.auxiliary_task.ob_mean
         self.ob_std = self.auxiliary_task.ob_std
         if predict_from_pixels:
@@ -63,6 +63,7 @@ class Dynamics(SaveLoad):
         sh = tf.shape(ac)
         ac = flatten_two_dims(ac)
         rnn_state = flatten_two_dims(self.rnn_state)
+        rnn_state = tf.layers.dense(rnn_state, 32, activation=tf.nn.leaky_relu)
         # print(rnn_output.get_shape(), ac.get_shape())
 
         def add_ac(x):
@@ -75,17 +76,17 @@ class Dynamics(SaveLoad):
             x = tf.layers.dense(add_ac_rnn(x), self.hidsize, activation=tf.nn.leaky_relu)
 
             def residual(x):
-                res = tf.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
+                res = tf.layers.dense(add_ac_rnn(x), self.hidsize, activation=tf.nn.leaky_relu)
                 # if self.use_tboard:
                 #     weights = tf.get_default_graph().get_tensor_by_name(os.path.split(res.name)[0] + '/kernel:0')
                 #     tf.summary.histogram("dynamics_kernel1", weights)
-                res = tf.layers.dense(add_ac(res), self.hidsize, activation=None)
+                res = tf.layers.dense(add_ac_rnn(res), self.hidsize, activation=None)
                 return x + res
 
             for _ in range(4):
                 x = residual(x)
             n_out_features = self.out_features.get_shape()[-1].value
-            x = tf.layers.dense(add_ac(x), n_out_features, activation=None)
+            x = tf.layers.dense(add_ac_rnn(x), n_out_features, activation=None)
             x = unflatten_first_dim(x, sh)
         return x
 
@@ -106,8 +107,7 @@ class Dynamics(SaveLoad):
     #                                           self.ac: acs[sli(i)]}) for i in range(n_chunks)], 0) # New, maybe error
 
     def calculate_loss(self, ob, last_ob, acs, states, nminibatches=None):
-        states, _ = np.split(states, 2, axis=2)
-
+        # states, _ = np.split(states, 2, axis=2)
         if nminibatches is not None:
             n_chunks = nminibatches
         else:
@@ -129,7 +129,7 @@ class Dynamics(SaveLoad):
     #                          {self.obs: ob, self.last_ob: last_ob, self.ac: acs})
 
     def calculate_err(self, ob, last_ob, acs, states):
-        states, _ = np.split(states, 2, axis=2)
+        # states, _ = np.split(states, 2, axis=2)
         return getsess().run([self.pred_error, self.pred_features],
                              {self.obs: ob, self.last_ob: last_ob, self.ac: acs, self.rnn_state: states})
 

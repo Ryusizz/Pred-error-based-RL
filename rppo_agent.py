@@ -208,7 +208,7 @@ class RnnPpoOptimizer(object):
              self.rollout.buf_obs_last.reshape([self.nenvs * self.nsegs_per_env, 1, *self.ob_space.shape]))
         ])
         buf_states_prev = np.concatenate([np.expand_dims(self.rollout.buf_states_first, 1), self.rollout.buf_states[:, :-1, :]], 1)
-        buf_states_prev, _ = np.split(buf_states_prev, 2, axis=2)
+        # buf_states_prev, _ = np.split(buf_states_prev, 2, axis=2)
         ph_buf.extend([
             (self.trainpol.states_ph, resh(self.rollout.buf_states_first)),     # rnn inputs
             (self.trainpol.masks_ph, resh(self.rollout.buf_news)),

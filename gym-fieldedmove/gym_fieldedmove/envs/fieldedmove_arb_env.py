@@ -19,13 +19,9 @@ os.environ['SDL_AUDIODRIVER'] = 'dsp'
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
-GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
-YELLOW = (255, 255, 0)
-PINK = (255, 0, 255)
-CYAN = (0, 255, 255)
 
-class FieldedMove(gym.Env):
+class FieldedMoveArb(gym.Env):
 	metadata = {'render.modes': ['console', 'human'],
 				'video.frames_per_second' : 10}
 
@@ -61,6 +57,7 @@ class FieldedMove(gym.Env):
 		self.dist_goal_thres = 0.5
 		self.goal_degree = None #2*np.pi
 		self.goal = None #np.array([self.rad * np.sin(self.goal_degree), self.rad * np.cos(self.goal_degree)])
+		self.center = np.array([self.window_height / 2., self.window_width / 2.])
 		# self.goal += self.center
 
 		self.magnitude = 0.5 #np.array([15, 15])
@@ -84,6 +81,7 @@ class FieldedMove(gym.Env):
 		self.done = 0
 		self.n_trial = 0
 
+		self.position = np.array([self.window_height / 2., self.window_width / 2.])
 		self._reset_field()
 		self._reset_task()
 		# if self.mode == "human":
@@ -101,16 +99,17 @@ class FieldedMove(gym.Env):
 		# self.period_y = self.period_x
 
 	def _reset_task(self):
-		self.center = np.array([self.window_height / 2., self.window_width / 2.])
-		self.position = np.array([self.window_height / 2., self.window_width / 2.])
+		# self.center = np.array([self.window_height / 2., self.window_width / 2.])
+		# self.position = np.array([self.window_height / 2., self.window_width / 2.])
 		self.velocity = np.zeros(2)
 		self.reward = 0
 		self.value = 0
 
 		# self.goal_degree = random.randint(0, 35) * (2*np.pi/36)
-		self.goal_degree = random.random() * (2*np.pi)
-		self.goal = np.array([self.rad*np.sin(self.goal_degree), self.rad*np.cos(self.goal_degree)])
-		self.goal += self.center
+		# self.goal_degree = random.random() * (2*np.pi)
+		# self.goal = np.array([self.rad*np.sin(self.goal_degree), self.rad*np.cos(self.goal_degree)])
+		# self.goal += self.center
+		self.goal = np.random.randint(self.window_width, size=2)
 
 	def render(self, mode='console', close=False):
 		if mode == 'console':
@@ -140,10 +139,10 @@ class FieldedMove(gym.Env):
 
 				self.screen.fill(BLACK)
 
-				self.player_render.update(self.position[0], self.position[1])
 				self.goal_render.update(self.goal[0], self.goal[1])
-				self.screen.blit(self.player_render.image, self.player_render.rect)
+				self.player_render.update(self.position[0], self.position[1])
 				self.screen.blit(self.goal_render.image, self.goal_render.rect)
+				self.screen.blit(self.player_render.image, self.player_render.rect)
 				pygame.display.update()
 
 			if close:
@@ -197,10 +196,10 @@ class FieldedMove(gym.Env):
 
 	def _update_state(self):
 		self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
-		posX, posY = np.round(self.position).astype(int)
-		self.state[posY:posY + self.agent_size, posX:posX + self.agent_size] = BLUE
 		posX_g, posY_g = np.round(self.goal).astype(int)
 		self.state[posY_g:posY_g + self.goal_size, posX_g:posX_g + self.goal_size] = RED
+		posX, posY = np.round(self.position).astype(int)
+		self.state[posY:posY + self.agent_size, posX:posX + self.agent_size] = BLUE
 		# img = pygame.display.get_surface()
 		# if img is not None:
 		# 	self.state = pygame.surfarray.array3d(img)
@@ -218,6 +217,7 @@ class FieldedMove(gym.Env):
 
 	def set_mode(self, mode):
 		self.mode = mode
+
 
 
 class Object(pygame.sprite.Sprite):
@@ -239,7 +239,7 @@ class Object(pygame.sprite.Sprite):
 successes, failures = pygame.init()
 print("Initializing pygame: {0} successes and {1} failures.".format(successes, failures))
 def main():
-	env = FieldedMove()
+	env = FieldedMoveArb()
 	env.set_mode('human')
 	# env.reset()
 	running = True
