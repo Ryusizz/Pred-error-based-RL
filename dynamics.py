@@ -69,7 +69,7 @@ class Dynamics(SaveLoad):
         def add_ac(x):
             return tf.concat([x, ac], axis=-1)
         def add_ac_rnn(x):
-            return tf.concat([x, rnn_state, ac], axis=-1)
+            return tf.concat([x, ac, rnn_state], axis=-1)
 
         with tf.variable_scope(self.scope, reuse=reuse):
             x = flatten_two_dims(self.features)

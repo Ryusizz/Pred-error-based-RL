@@ -154,7 +154,7 @@ class Trainer(object):
 def make_env_all_params(rank, add_monitor, args):
     if args["env_kind"] == 'atari':
         env = gym.make(args['env'])
-        assert 'NoFrameskip' in env.spec.id
+        # assert 'NoFrameskip' in env.spec.id
         env = NoopResetEnv(env, noop_max=args['noop_max'])
         env = MaxAndSkipEnv(env, skip=4)
         env = ProcessFrame84(env, crop=False)

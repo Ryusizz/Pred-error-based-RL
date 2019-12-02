@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import datetime
 
+from rnn_policy_noconv import RnnPolicy_NoConv, ErrorPredRnnPolicy_NoConv
+
 try:
     from OpenGL import GLU
 except:
@@ -49,7 +51,7 @@ def start_experiment(**args):
             for k, v in args.items():
                 argfile.write(str(k) + ' >>> ' + str(v) + '\n')
 
-        trainer.train()
+        trainer.train(tf_sess)
 
 
 class Trainer(object):
@@ -65,7 +67,9 @@ class Trainer(object):
                        "rnnerr" : ErrorRnnPolicy,
                        "rnnerrac" : ErrorActRnnPolicy,
                        "rnnerrpred" : ErrorPredRnnPolicy,
-                       'rnnerrprede2e' : ErrorPredE2ERnnPolicy}[hps['policy_mode']]
+                       'rnnerrprede2e' : ErrorPredE2ERnnPolicy,
+                       'rnn_noconv' : RnnPolicy_NoConv,
+                       'rnnerrpred_noconv' : ErrorPredRnnPolicy_NoConv}[hps['policy_mode']]
         self.action_policy = self.policy(
             ob_space=self.ob_space,
             ac_space=self.ac_space,
@@ -163,35 +167,47 @@ class Trainer(object):
         env = self.make_env(0, add_monitor=False)
         self.ob_space, self.ac_space = env.observation_space, env.action_space
         self.ob_mean, self.ob_std = random_agent_ob_mean_std(env)
+        # self.ob_mean = np.zeros_like(self.ob_mean) # don't use the observation normalization
+        # self.ob_std = np.ones_like(self.ob_std)
         del env
         self.envs = [functools.partial(self.make_env, i) for i in range(self.envs_per_process)]
 
-    def train(self):
+    def train(self, tf_sess):
         self.agent.start_interaction(self.envs, nlump=self.hps['nlumps'], dynamics=self.action_dynamics)
         expdir = osp.join("/result", self.hps['env'], self.hps['exp_name'])
         save_checkpoints = []
         if self.hps['save_interval'] is not None:
             save_checkpoints = [i*self.hps['save_interval'] for i in range(1, self.hps['num_timesteps']//self.hps['save_interval'])]
-        if self.hps['load_dir'] is not None:
+        if self.hps['load_dir'] is not None: #Todo: Bug Fix!
             self.train_feature_extractor.load(self.hps['load_dir'])
             self.train_dynamics.load(self.hps['load_dir'])
 
+        saver = tf.train.Saver()
         while True:
             info = self.agent.step()
             if info['update']:
                 logger.logkvs(info['update'])
                 logger.dumpkvs()
-            if len(save_checkpoints) > 0:
-                if self.agent.rollout.stats['tcount'] > save_checkpoints[0]:
-                    self.train_feature_extractor.save(expdir, self.agent.rollout.stats['tcount'])
-                    self.train_dynamics.save(expdir, self.agent.rollout.stats['tcount'])
-                    save_checkpoints.remove(save_checkpoints[0])
+                if MPI.COMM_WORLD.Get_rank() == 0:
+                    saver.save(tf_sess, osp.join(expdir, 'model'))
+            # if len(save_checkpoints) > 0:
+            #     if self.agent.rollout.stats['tcount'] > save_checkpoints[0]:
+            #         # self.train_feature_extractor.save(expdir, self.agent.rollout.stats['tcount'])
+            #         # self.train_dynamics.save(expdir, self.agent.rollout.stats['tcount'])
+            #         self.action_policy.save(expdir, self.agent.rollout.stats['tcount'])
+            #         self.action_feature_extractor.save(expdir, self.agent.rollout.stats['tcount'])
+            #         self.action_dynamics.save(expdir, self.agent.rollout.stats['tcount'])
+            #         save_checkpoints.remove(save_checkpoints[0])
             if self.agent.rollout.stats['tcount'] > self.num_timesteps:
                 break
 
         if self.hps['save_dynamics'] and MPI.COMM_WORLD.Get_rank()== 0:       # save auxilary task and dynamics parameter
-            self.train_feature_extractor.save(expdir)
-            self.train_dynamics.save(expdir)
+            # self.train_feature_extractor.save(expdir)
+            # self.train_dynamics.save(expdir)
+            # self.action_policy.save(expdir)
+            # self.action_feature_extractor.save(expdir)
+            # self.action_dynamics.save(expdir)
+            saver.save(tf_sess, '/result/test')
         self.agent.stop_interaction()
 
 
@@ -239,6 +255,10 @@ def make_env_all_params(rank, add_monitor, args):
         env = FrameStack(env, 4)
         env = ExtraTimeLimit(env, args['max_episode_steps'])
         env = AddRandomStateToInfo(env)
+    elif args["env_kind"] == 'robotics':
+        env = gym.make(args['env'])
+        env.env.reward_type = "dense"
+        env = gym.wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
 
     if add_monitor:
         env = Monitor(env, osp.join(logger.get_dir(), '%.2i' % rank))
@@ -259,10 +279,10 @@ def get_experiment_environment(**args):
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='SeaquestNoFrameskip-v4',
+    parser.add_argument('--env', help='environment ID', default='FetchReach-v1',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=30000, type=int)
-    parser.add_argument('--env_kind', type=str, default="atari")
+    parser.add_argument('--env_kind', type=str, default="robotics")
     parser.add_argument('--noop_max', type=int, default=30)
 
 
@@ -305,7 +325,7 @@ if __name__ == '__main__':
     parser.add_argument('--feat_learning', type=str, default="none",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
     parser.add_argument('--policy_mode', type=str, default="rnnerrpred",
-                        choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred", "rnnerrprede2e"]) # New
+                        choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred", "rnnerrprede2e", 'rnn_noconv', 'rnnerrpred_noconv']) # New
     parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
     parser.add_argument('--tboard_period', type=int, default=10) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=1) # New
