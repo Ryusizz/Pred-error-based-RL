@@ -1,0 +1,15 @@
+Tue Oct  8 11:58:01 2019
+ERROR: OpenGL version 1.5 or higher required
+
+Tue Oct  8 12:03:04 2019
+ERROR: OpenGL version 1.5 or higher required
+
+Mon Oct 14 15:53:35 2019
+ERROR: Expired activation key
+
+Wed Oct 23 20:50:14 2019
+ERROR: GLEW initalization error: Missing GL version
+
+Wed Oct 23 20:50:45 2019
+ERROR: GLEW initalization error: Missing GL version
+

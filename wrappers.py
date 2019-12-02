@@ -1,6 +1,7 @@
 import itertools
 from collections import deque
 from copy import copy
+import random
 
 import gym
 import numpy as np
@@ -353,3 +354,39 @@ def make_robo_hockey(frame_stack=True):
         env = FrameStack(env, 4)
     env = AddRandomStateToInfo(env)
     return env
+
+class ExternalForceWrapper(gym.Wrapper):
+    def __init__(self, env, mag):
+        super(ExternalForceWrapper, self).__init__(env)
+        self.mag = mag
+        self._reset_period()
+
+    def _calculate_fieldforce(self, ac):
+        x, y, z = ac
+        r = np.sqrt(x**2 + y**2 + z**2)
+        phi = np.arctan2(y, x)
+        theta = np.arccos(z/r)
+        # print("theta", theta, "phi", phi)
+        F = np.array([np.sin(phi + self.period_x * np.pi/2), -np.cos(phi + self.period_y * np.pi/2), np.sin(theta + self.period_z * np.pi/2)])
+        # F = np.array([np.sin(self.period_x * phi), -np.cos(self.period_y * phi)])
+        mag_curr = self.mag * r
+        F = np.multiply(F, mag_curr)
+        return F
+
+    def _reset_period(self):
+        self.period_x = random.randint(1, 4)
+        self.period_y = random.randint(1, 4)
+        self.period_z = random.randint(1, 4)
+        # print("periods", self.period_x, self.period_y, self.period_z)
+
+    def step(self, action):
+        # print("original action", action)
+        F = self._calculate_fieldforce(action[:3])
+        # print("additional force", F)
+        action[:3] += F
+        # print("modified action", action)
+        return self.env.step(action)
+
+    def reset(self):
+        self._reset_period()
+        return self.env.reset()

@@ -30,7 +30,7 @@ class FeatureExtractor(SaveLoad):
         #     self.last_ob = tf.placeholder(dtype=tf.int32,
         #                                   shape=(n_env, 1) + self.ob_space.shape, name='last_ob')
         # else:
-        self.last_ob = tf.placeholder(dtype=tf.int32,
+        self.last_ob = tf.placeholder(dtype=self.obs.dtype,
                                       shape=(n_env, 1) + self.ob_space.shape, name='last_ob')
         self.next_ob = tf.concat([self.obs[:, 1:], self.last_ob], 1)
 

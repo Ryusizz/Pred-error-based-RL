@@ -49,10 +49,10 @@ class Rollout(object):
         # print(dynamics.pred_error.shape)
         # print(dynamics.pred_error.dtype)
         # self.buf_errs = np.zeros((nenvs, self.nsteps, 512), np.float32) # New
-        self.buf_errs = np.random.normal(size=(nenvs, self.nsteps, self.hidsize))  # New
+        self.buf_errs = np.random.normal(size=(nenvs, self.nsteps, self.ob_space.shape[0]))  #TODO: shape control
         self.buf_errs_last = self.buf_errs[:, 0, ...].copy() # New
         # self.buf_obpreds = np.zeros((nenvs, self.nsteps, 512), np.float32)
-        self.buf_obpreds = np.random.normal(size=(nenvs, self.nsteps, self.hidsize))
+        self.buf_obpreds = np.random.normal(size=(nenvs, self.nsteps, self.ob_space.shape[0]))
         self.buf_obpreds_last = self.buf_obpreds[:, 0, ...].copy()
         # self.buf_states = np.zeros((nenvs, self.nsteps, 512), np.float32) # RNN
         self.buf_states = np.random.normal(size=(nenvs, self.nsteps, 2*self.n_lstm))
@@ -78,6 +78,7 @@ class Rollout(object):
         for t in range(self.nsteps):
             self.rollout_step()
         self.calculate_reward()
+        # self.buf_rews[:] = self.buf_ext_rews.copy()
         self.update_info()
 
     def calculate_reward(self):

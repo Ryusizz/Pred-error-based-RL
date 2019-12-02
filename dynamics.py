@@ -14,6 +14,7 @@ class Dynamics(SaveLoad):
         self.scope = scope
         self.auxiliary_task = auxiliary_task
         self.hidsize = self.auxiliary_task.hidsize
+        self.hidsize = auxiliary_task.ac_space.shape[0]
         self.feat_dim = feat_dim
         # self.full_tensorboard_log = full_tensorboard_log
         self.reuse = reuse
@@ -36,7 +37,9 @@ class Dynamics(SaveLoad):
         self.out_features = self.auxiliary_task.next_features
 
         self.pred_features = self.predict_next(self.reuse)
+        self.pred_features = tf.identity(self.pred_features, name="pred_features")
         self.pred_error = self.pred_features - tf.stop_gradient(self.out_features)
+        self.pred_error = tf.identity(self.pred_error, name="pred_error")
         with tf.variable_scope(self.scope + "_loss"):
             # self.loss = self.get_loss(self.pred_features)
             self.loss = tf.reduce_mean(self.pred_error ** 2, -1)

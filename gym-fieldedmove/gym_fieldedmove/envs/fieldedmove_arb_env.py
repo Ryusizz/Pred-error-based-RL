@@ -93,8 +93,8 @@ class FieldedMoveArb(gym.Env):
 		return self._update_state()
 
 	def _reset_field(self):
-		self.period_x = random.randint(1, 4)
-		self.period_y = random.randint(1, 4)
+		self.period_x = random.randint(1, 5)
+		self.period_y = random.randint(1, 5)
 		# self.period_x = 4 * random.random()
 		# self.period_y = 4 * random.random()
 		# self.period_y = self.period_x

@@ -1,3 +1,4 @@
+import mujoco_py
 import tensorflow as tf
 import numpy as np
 import gym
@@ -30,9 +31,19 @@ from wrappers import ExtraTimeLimit, ExternalForceWrapper
 #         ob_flat = [ ob[k] for k in self.dict_keys ]
 #         ob_flat = np.concatenate(ob_flat)
 #         return ob_flat
+mujoco_py.ignore_mujoco_warnings().__enter__()
 
-
-
+def ob_process(ob, is_achieved, threshold):
+    ob = ob[[0, 1, 2, 3, 4, 5, -6, -5, -4, -3, -2, -1]]
+    d = np.sqrt((ob[0] - ob[-6]) ** 2 + (ob[1] - ob[-5]) ** 2 + (ob[2] - ob[-4]) ** 2)
+    print("distance:{}".format(d))
+    if not is_achieved and d < threshold:
+        is_achieved = True
+    if not is_achieved:
+        ob = ob[:-3]
+    else:
+        ob = ob[[0, 1, 2, 3, 4, 5, 9, 10, 11]]
+    return ob, is_achieved
 
 
 
@@ -44,12 +55,16 @@ def start_test(**args):
         # env.env.reward_type = "incentive"
         # print(env.reset())
         # env = Monitor(env, args['load_path'])
-        env = gym.wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
+        env = gym.wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'achieved_goal','desired_goal'])
         env = ExternalForceWrapper(env, 0.5)
         print(env.reset())
         has_err = args['has_err']
+        threshold = 0.03
 
         i = 0
+        is_achieved = False
+        is_achieved_p = False
+        grip_margin = 0
         while(True):
             i += 1
             print("Loading {}th model".format(i))
@@ -84,6 +99,8 @@ def start_test(**args):
 
             # idx_array = [0,1,2,3,4,5,10,11,12]
             ob = env.reset()
+            is_achieved_p = is_achieved
+            ob, is_achieved = ob_process(ob, is_achieved, threshold)
             # ob = ob[idx_array]
             # ac_prev = np.zeros(4)
             ob_shaped = np.zeros((8, 1, 9))
@@ -114,9 +131,26 @@ def start_test(**args):
                 # print(a.shape, v.shape, s.shape, nlp.shape)
                 # states_shaped[0, ...] = s
                 states_shaped = s
+                if not is_achieved_p and is_achieved:
+                    grip_margin = 10
+
+                if not is_achieved:
+                    a[0, 0, 3] = -1
+                else:
+                    a[0, 0, 3] = 5
+                if 5 < grip_margin < 15:
+                    a[0, 0, :] = a[0, 0, :]*0.01
+                    a[0, 0, 3] = 5
+                    grip_margin -= 1
+                if 0 < grip_margin <= 5:
+                    a[0, 0, :] = a[0, 0, :] * 0.01
+                    a[0, 0, 2] = 1
+                    grip_margin -= 1
 
                 # step the environememtn
-                ob, rew, done, info = env.step(a[0, 0, :])
+                ob, rew, done, info = env.step(a[0, 0, :]/4)
+                is_achieved_p = is_achieved
+                ob, is_achieved = ob_process(ob, is_achieved, threshold)
                 # ob = ob[idx_array]
 
                 # Oracle
@@ -142,15 +176,17 @@ def start_test(**args):
 
                     eprew = 0
                     ob = env.reset()
+                    ob, is_achieved = ob_process(ob, is_achieved, threshold)
                     # ob = ob[idx_array]
                     ob_shaped[0, ...] = ob
                     states_shaped = np.random.normal(size=(8, 256))
                     masks_shaped = np.zeros((8, 1))
+                    is_achieved = False
             print("Average reward for model {} : {}".format(i, np.mean(eprew_record)))
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='UR5ReachDense-v1',
+    parser.add_argument('--env', help='environment ID', default='UR5PickAndPlaceDense-v1',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=30000, type=int)
     parser.add_argument('--env_kind', type=str, default="robotics")
@@ -169,7 +205,7 @@ if __name__ == '__main__':
     # parser.add_argument('--feat_sharedWpol', type=int, default=1) # New
     # parser.add_argument('--save_dynamics', type=int, default=0)
     # parser.add_argument('--save_interval', type=int, default=None)
-    parser.add_argument('--load_path', type=str, default='/result/UR5ReachDense-v1/ErrPred_newUR5_noObRewNorm_scopeFix_Force50_2/')
+    parser.add_argument('--load_path', type=str, default='/result/UR5ReachDense-v1/ErrPred_ppo1like_noObRewNorm_scopeFix_Force50_3/')
     parser.add_argument('--model_name', type=str, default='model.meta')
     parser.add_argument('--has_err', type=int, default=1)
 

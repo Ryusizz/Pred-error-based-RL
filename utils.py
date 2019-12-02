@@ -80,9 +80,11 @@ def setup_tensorflow_session():
     num_cpu = guess_available_cpus()
 
     tf_config = tf.ConfigProto(
+        allow_soft_placement=True,
         inter_op_parallelism_threads=num_cpu,
         intra_op_parallelism_threads=num_cpu
     )
+    tf_config.gpu_options.allow_growth = True
     return tf.Session(config=tf_config)
 
 
@@ -113,7 +115,7 @@ def layernorm(x):
 
 getsess = tf.get_default_session
 
-fc = partial(tf.layers.dense, kernel_initializer=normc_initializer(1.))
+fc = partial(tf.layers.dense, kernel_initializer=normc_initializer(1.0))
 activ = tf.nn.relu
 
 

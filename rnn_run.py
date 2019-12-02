@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import datetime
 
+import mujoco_py
+
 from rnn_policy_noconv import RnnPolicy_NoConv, ErrorPredRnnPolicy_NoConv
 
 try:
@@ -16,8 +18,10 @@ import tensorflow as tf
 from baselines import logger
 from baselines.bench import Monitor
 from baselines.common.atari_wrappers import NoopResetEnv, FrameStack
+from baselines.common import set_global_seeds
 from stable_baselines.common import tf_util
 from mpi4py import MPI
+import baselines.common.tf_util as U
 
 from auxiliary_tasks import FeatureExtractor, InverseDynamics, VAE, JustPixels
 from rnn_policy import *
@@ -25,7 +29,7 @@ from rppo_agent import RnnPpoOptimizer
 from dynamics import Dynamics, UNet
 from utils import random_agent_ob_mean_std
 from wrappers import MontezumaInfoWrapper, make_mario_env, make_robo_pong, make_robo_hockey, \
-    make_multi_pong, AddRandomStateToInfo, MaxAndSkipEnv, ProcessFrame84, ExtraTimeLimit
+    make_multi_pong, AddRandomStateToInfo, MaxAndSkipEnv, ProcessFrame84, ExtraTimeLimit, ExternalForceWrapper
 
 # Troubleshooting
 import warnings
@@ -35,6 +39,10 @@ import os
 os.environ['SDL_AUDIODRIVER'] = 'dsp'
 
 def start_experiment(**args):
+    # sess = U.single_threaded_session()
+    # sess.__enter__()
+    # mujoco_py.ignore_mujoco_warnings().__enter__()
+
     make_env = partial(make_env_all_params, add_monitor=True, args=args)
     logdir = osp.join("/result", args['env'], args['exp_name'], datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f"))
     log = logger.scoped_configure(dir=logdir, format_strs=['stdout', 'log', 'csv'] if MPI.COMM_WORLD.Get_rank() == 0 else ['log'])
@@ -70,22 +78,23 @@ class Trainer(object):
                        'rnnerrprede2e' : ErrorPredE2ERnnPolicy,
                        'rnn_noconv' : RnnPolicy_NoConv,
                        'rnnerrpred_noconv' : ErrorPredRnnPolicy_NoConv}[hps['policy_mode']]
-        self.action_policy = self.policy(
-            ob_space=self.ob_space,
-            ac_space=self.ac_space,
-            hidsize=hps['hidsize'],
-            feat_dim=hps['hidsize'],
-            ob_mean=self.ob_mean,
-            ob_std=self.ob_std,
-            layernormalize=False,
-            nl=tf.nn.leaky_relu,
-            n_env=hps['envs_per_process'],
-            n_steps=1,
-            reuse=False,
-            n_lstm=hps['hidsize'] / 2,
-        )
-        with tf.variable_scope("train_model", reuse=True,
-                               custom_getter=tf_util.outer_scope_getter("train_model")):
+
+        with tf.variable_scope("policies", reuse=tf.AUTO_REUSE):
+                               # custom_getter=tf_util.outer_scope_getter("train_model")):
+            self.action_policy = self.policy(
+                ob_space=self.ob_space,
+                ac_space=self.ac_space,
+                hidsize=hps['hidsize'],
+                feat_dim=hps['hidsize'],
+                ob_mean=self.ob_mean,
+                ob_std=self.ob_std,
+                layernormalize=False,
+                nl=tf.nn.leaky_relu,
+                n_env=hps['envs_per_process'],
+                n_steps=1,
+                reuse=tf.AUTO_REUSE,
+                n_lstm=hps['hidsize'] / 2,
+            )
             self.train_policy = self.policy(
                 ob_space=self.ob_space,
                 ac_space=self.ac_space,
@@ -97,7 +106,7 @@ class Trainer(object):
                 nl=tf.nn.leaky_relu,
                 n_env=hps['envs_per_process'] // hps['nminibatches'],
                 n_steps=hps['nsteps_per_seg'],
-                reuse=True,
+                reuse=tf.AUTO_REUSE,
                 n_lstm=hps['hidsize'] / 2,
             )
         self.feature_extractor = {"none": FeatureExtractor,
@@ -139,7 +148,7 @@ class Trainer(object):
             nepochs=hps['nepochs'],
             nminibatches=hps['nminibatches'],
             lr=hps['lr'],
-            cliprange=0.1,
+            cliprange=0.2,
             nsteps_per_seg=hps['nsteps_per_seg'],
             nsegs_per_env=hps['nsegs_per_env'],
             ent_coef=hps['ent_coeff'],
@@ -167,8 +176,8 @@ class Trainer(object):
         env = self.make_env(0, add_monitor=False)
         self.ob_space, self.ac_space = env.observation_space, env.action_space
         self.ob_mean, self.ob_std = random_agent_ob_mean_std(env)
-        # self.ob_mean = np.zeros_like(self.ob_mean) # don't use the observation normalization
-        # self.ob_std = np.ones_like(self.ob_std)
+        self.ob_mean = np.zeros_like(self.ob_mean) # don't use the observation normalization
+        self.ob_std = np.ones_like(self.ob_std)
         del env
         self.envs = [functools.partial(self.make_env, i) for i in range(self.envs_per_process)]
 
@@ -256,14 +265,29 @@ def make_env_all_params(rank, add_monitor, args):
         env = ExtraTimeLimit(env, args['max_episode_steps'])
         env = AddRandomStateToInfo(env)
     elif args["env_kind"] == 'robotics':
-        env = gym.make(args['env'])
-        env.env.reward_type = "dense"
-        env = gym.wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
+        # env = gym.make(args['env'])
+        # env.env.reward_type = "dense"
+        workerseed = args['seed'] + 10000 * MPI.COMM_WORLD.Get_rank()
+        env = make_robotics_env(args['env'], workerseed, rank=MPI.COMM_WORLD.Get_rank())
+        # env = gym.wrappers.FlattenDictWrapper(env, dict_keys=['observation', 'desired_goal'])
+        env = ExternalForceWrapper(env, 0.5)
 
     if add_monitor:
         env = Monitor(env, osp.join(logger.get_dir(), '%.2i' % rank))
     return env
 
+def make_robotics_env(env_id, seed, rank=0):
+    """
+    Create a wrapped, monitored gym.Env for MuJoCo.
+    """
+    # set_global_seeds(seed)
+    env = gym.make(env_id)
+    env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+    env = Monitor(
+        env, logger.get_dir() and os.path.join(logger.get_dir(), str(rank)),
+        info_keywords=('is_success',))
+    env.seed(seed)
+    return env
 
 def get_experiment_environment(**args):
     from utils import setup_mpi_gpus, setup_tensorflow_session
@@ -272,14 +296,14 @@ def get_experiment_environment(**args):
     process_seed = args["seed"] + 1000 * MPI.COMM_WORLD.Get_rank()
     process_seed = hash_seed(process_seed, max_bytes=4)
     set_global_seeds(process_seed)
-    setup_mpi_gpus()
+    # setup_mpi_gpus()
 
     tf_context = setup_tensorflow_session()
     return tf_context
 
 
 def add_environments_params(parser):
-    parser.add_argument('--env', help='environment ID', default='FetchReach-v1',
+    parser.add_argument('--env', help='environment ID', default='UR5ReachIncenMulti-v1',
                         type=str)
     parser.add_argument('--max-episode-steps', help='maximum number of timesteps for episode', default=30000, type=int)
     parser.add_argument('--env_kind', type=str, default="robotics")
@@ -289,10 +313,10 @@ def add_environments_params(parser):
 def add_optimization_params(parser):
     parser.add_argument('--lambda', type=float, default=0.95)
     parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--nminibatches', type=int, default=8)
+    parser.add_argument('--nminibatches', type=int, default=1)
     parser.add_argument('--norm_adv', type=int, default=1)
     parser.add_argument('--norm_rew', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--ent_coeff', type=float, default=0.001)
     parser.add_argument('--dyn_coeff', type=float, default=1)
     parser.add_argument('--aux_coeff', type=float, default=1)
@@ -301,9 +325,9 @@ def add_optimization_params(parser):
 
 
 def add_rollout_params(parser):
-    parser.add_argument('--nsteps_per_seg', type=int, default=128)
+    parser.add_argument('--nsteps_per_seg', type=int, default=64)
     parser.add_argument('--nsegs_per_env', type=int, default=1)
-    parser.add_argument('--envs_per_process', type=int, default=128)
+    parser.add_argument('--envs_per_process', type=int, default=8)
     parser.add_argument('--nlumps', type=int, default=1)
 
 
@@ -315,25 +339,25 @@ if __name__ == '__main__':
     add_optimization_params(parser)
     add_rollout_params(parser)
 
-    parser.add_argument('--exp_name', type=str, default='test')
-    parser.add_argument('--seed', help='RNG seed', type=int, default=0)
+    parser.add_argument('--exp_name', type=str, default='Test')
+    parser.add_argument('--seed', help='RNG seed', type=int, default=1)
     parser.add_argument('--dyn_from_pixels', type=int, default=0)
-    parser.add_argument('--use_news', type=int, default=0)
+    parser.add_argument('--use_news', type=int, default=1)
     parser.add_argument('--ext_coeff', type=float, default=1.)
     parser.add_argument('--int_coeff', type=float, default=0.)
     parser.add_argument('--layernorm', type=int, default=0)
     parser.add_argument('--feat_learning', type=str, default="none",
                         choices=["none", "idf", "vaesph", "vaenonsph", "pix2pix"])
-    parser.add_argument('--policy_mode', type=str, default="rnnerrpred",
+    parser.add_argument('--policy_mode', type=str, default="rnnerrpred_noconv",
                         choices=["rnn", "rnnerr", "rnnerrac", "rnnerrpred", "rnnerrprede2e", 'rnn_noconv', 'rnnerrpred_noconv']) # New
-    parser.add_argument('--full_tensorboard_log', type=int, default=1) # New
-    parser.add_argument('--tboard_period', type=int, default=10) # New
+    parser.add_argument('--full_tensorboard_log', type=int, default=0) # New
+    parser.add_argument('--tboard_period', type=int, default=2) # New
     parser.add_argument('--feat_sharedWpol', type=int, default=1) # New
     parser.add_argument('--save_dynamics', type=int, default=0)
     parser.add_argument('--save_interval', type=int, default=None)
     parser.add_argument('--load_dir', type=str, default=None)
-    parser.add_argument('--hidsize', type=int, default=512)
-    parser.add_argument('--n_lstm', type=int, default=256)
+    parser.add_argument('--hidsize', type=int, default=256)
+    parser.add_argument('--n_lstm', type=int, default=128)
 
     args = parser.parse_args()
 
