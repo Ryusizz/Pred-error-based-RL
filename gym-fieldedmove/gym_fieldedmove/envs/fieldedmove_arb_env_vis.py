@@ -26,13 +26,13 @@ class FieldedMoveArb(gym.Env):
 				'video.frames_per_second' : 10}
 
 	def __init__(self):
-		self.window_height = 84
-		self.window_width = 84
-		self.env_height = 84
-		self.env_width = 84
-		self.goal_size = 7
-		self.agent_size = 7
-		self.rad = 25
+		self.window_height = 84*3
+		self.window_width = 84*3
+		self.env_height = 84*3
+		self.env_width = 84*3
+		self.goal_size = 7*3
+		self.agent_size = 7*3
+		self.rad = 25*3
 		self.n_max_trial = 10000
 		self.n_trial = None
 		self.field_change = True
@@ -43,10 +43,10 @@ class FieldedMoveArb(gym.Env):
 		self.position = None #np.array([self.window_height/2., self.window_width/2.])
 		self.velocity = None #np.zeros(2)
 		# self.acceleration = np.zeros(2)
-		self.step_multiplier = 3
+		self.step_multiplier = 3*3
 
 		self.count = None
-		self.count_max = 100
+		self.count_max = 10000
 		self.done = 0
 		self.value = None
 		self.reward = None
@@ -60,7 +60,7 @@ class FieldedMoveArb(gym.Env):
 		self.center = np.array([self.window_height / 2., self.window_width / 2.])
 		# self.goal += self.center
 
-		self.magnitude = 0 #np.array([15, 15])
+		self.magnitude = 0.5 #np.array([15, 15])
 		# self.field = np.array([1., 1.])
 		self.period = None #random.randint(1,3)
 
@@ -93,8 +93,8 @@ class FieldedMoveArb(gym.Env):
 		return self._update_state()
 
 	def _reset_field(self):
-		self.period_x = random.randint(1, 4)
-		self.period_y = random.randint(1, 4)
+		self.period_x = random.randint(1, 5)
+		self.period_y = random.randint(1, 5)
 		# self.period_x = 4 * random.random()
 		# self.period_y = 4 * random.random()
 		# self.period_y = self.period_x
@@ -266,6 +266,18 @@ def main():
 					plt.ion()
 					plt.show()
 					plt.pause(0.025)
+				elif event.key == pygame.K_1:
+					env.period_x = env.period_y = 1
+					print("Period set to 1!")
+				elif event.key == pygame.K_2:
+					env.period_x = env.period_y = 2
+					print("Period set to 2!")
+				elif event.key == pygame.K_3:
+					env.period_x = env.period_y = 3
+					print("Period set to 3!")
+				elif event.key == pygame.K_4:
+					env.period_x = env.period_y = 4
+					print("Period set to 4!")
 			elif event.type == pygame.KEYUP:
 				if event.key == pygame.K_w:
 					target[1] += f

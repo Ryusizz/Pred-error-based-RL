@@ -12,3 +12,7 @@ register(
     id='FieldedMove-Arb-v0',
     entry_point='gym_fieldedmove.envs:FieldedMoveArb',
 )
+register(
+    id='FieldedMove-Grid-v0',
+    entry_point='gym_fieldedmove.envs:FieldedMoveGrid',
+)

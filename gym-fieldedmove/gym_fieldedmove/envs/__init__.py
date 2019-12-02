@@ -1,3 +1,4 @@
 from gym_fieldedmove.envs.fieldedmove_env import FieldedMove
 from gym_fieldedmove.envs.fieldedmove_meta_env import FieldedMoveMeta
 from gym_fieldedmove.envs.fieldedmove_arb_env import FieldedMoveArb
+from gym_fieldedmove.envs.fieldedmove_grid_env import FieldedMoveGrid

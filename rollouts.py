@@ -315,4 +315,5 @@ class Rollout(object):
                 out = self.env_results[l] = self.envs[l].step_wait()
             else:
                 out = self.env_results[l]
+
         return out

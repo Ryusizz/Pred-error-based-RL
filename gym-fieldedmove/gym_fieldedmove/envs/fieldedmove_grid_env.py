@@ -21,7 +21,7 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 
-class FieldedMoveArb(gym.Env):
+class FieldedMoveGrid(gym.Env):
 	metadata = {'render.modes': ['console', 'human'],
 				'video.frames_per_second' : 10}
 
@@ -36,6 +36,9 @@ class FieldedMoveArb(gym.Env):
 		self.n_max_trial = 10000
 		self.n_trial = None
 		self.field_change = True
+		self.n_gridX = self.n_gridY = 1
+		self.l_gridX = self.l_gridY = int(self.env_height/self.n_gridX)
+		# print(self.l_gridX)
 
 		self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self.env_height, self.env_width, 3), dtype=np.uint8)
 		self.action_space = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float32)
@@ -60,7 +63,7 @@ class FieldedMoveArb(gym.Env):
 		self.center = np.array([self.window_height / 2., self.window_width / 2.])
 		# self.goal += self.center
 
-		self.magnitude = 0 #np.array([15, 15])
+		self.magnitude = 0.5 #np.array([15, 15])
 		# self.field = np.array([1., 1.])
 		self.period = None #random.randint(1,3)
 
@@ -93,11 +96,15 @@ class FieldedMoveArb(gym.Env):
 		return self._update_state()
 
 	def _reset_field(self):
-		self.period_x = random.randint(1, 4)
-		self.period_y = random.randint(1, 4)
+		# self.period_x = random.randint(1, 4)
+		# self.period_y = random.randint(1, 4)
 		# self.period_x = 4 * random.random()
 		# self.period_y = 4 * random.random()
 		# self.period_y = self.period_x
+		self.force_list = [-3, -2, -1, 0, 1, 2, 3]
+		self.forceId_x = np.random.randint(0, len(self.force_list), size=self.n_gridX)
+		self.forceId_y = np.random.randint(0, len(self.force_list), size=self.n_gridY)
+
 
 	def _reset_task(self):
 		# self.center = np.array([self.window_height / 2., self.window_width / 2.])
@@ -140,10 +147,10 @@ class FieldedMoveArb(gym.Env):
 
 				self.screen.fill(BLACK)
 
-				self.goal_render.update(self.goal[0], self.goal[1])
 				self.player_render.update(self.position[0], self.position[1])
-				self.screen.blit(self.goal_render.image, self.goal_render.rect)
+				self.goal_render.update(self.goal[0], self.goal[1])
 				self.screen.blit(self.player_render.image, self.player_render.rect)
+				self.screen.blit(self.goal_render.image, self.goal_render.rect)
 				pygame.display.update()
 
 			if close:
@@ -198,10 +205,10 @@ class FieldedMoveArb(gym.Env):
 
 	def _update_state(self):
 		self.state = np.zeros((self.env_height, self.env_width, 3), dtype=np.uint8)
-		posX_g, posY_g = np.round(self.goal).astype(int)
-		self.state[posY_g:posY_g + self.goal_size, posX_g:posX_g + self.goal_size] = RED
 		posX, posY = np.round(self.position).astype(int)
 		self.state[posY:posY + self.agent_size, posX:posX + self.agent_size] = BLUE
+		posX_g, posY_g = np.round(self.goal).astype(int)
+		self.state[posY_g:posY_g + self.goal_size, posX_g:posX_g + self.goal_size] = RED
 		# img = pygame.display.get_surface()
 		# if img is not None:
 		# 	self.state = pygame.surfarray.array3d(img)
@@ -211,10 +218,20 @@ class FieldedMoveArb(gym.Env):
 
 	def _calculate_fieldforce(self, velocity):
 		x, y = velocity
-		phi = np.arctan2(y, x)
-		F = np.array([np.sin(self.period_x * phi), -np.cos(self.period_y * phi)])
-		mag_curr = self.magnitude * np.sqrt(x**2 + y**2)
-		F = np.multiply(F, mag_curr)
+		# print("Original velocity", x, y)
+		# phi = np.arctan2(y, x)
+		# F = np.array([np.sin(self.period_x * phi), -np.cos(self.period_y * phi)])
+		# mag_curr = self.magnitude * np.sqrt(x**2 + y**2)
+		# F = np.multiply(F, mag_curr)
+		posX, posY = np.round(self.position).astype(int)
+		# print(int(posX))
+		gridX = int(posX)//self.l_gridX
+		gridY = int(posY)//self.l_gridY
+		# print("Positions and id", posX, posY, gridX, gridY)
+		x += self.force_list[self.forceId_x[gridX]]
+		y += self.force_list[self.forceId_y[gridY]]
+		F = np.array([x, y])
+		# print("modified velocity", F)
 		return F
 
 	def set_mode(self, mode):
@@ -241,7 +258,7 @@ class Object(pygame.sprite.Sprite):
 successes, failures = pygame.init()
 print("Initializing pygame: {0} successes and {1} failures.".format(successes, failures))
 def main():
-	env = FieldedMoveArb()
+	env = FieldedMoveGrid()
 	env.set_mode('human')
 	# env.reset()
 	running = True
